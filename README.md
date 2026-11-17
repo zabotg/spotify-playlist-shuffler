@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Spotify Playlist Shuffler
 
-## Getting Started
+Smarter shuffle modes, playlist insights and music discovery for your Spotify playlists. Runs locally on your machine.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Shuffle modes**: pure random, artist-balanced, artist spacing, smooth BPM transitions, energy curves and mood sequences
+- **Preview before saving**: reorder the preview by any column, then overwrite the playlist or save it as a new one
+- **Insights**: duration, artist diversity, release decades, top artists, genres and audio characteristics
+- **Discovery**: suggests new tracks from artists related to the ones in your playlist
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [Next.js](https://nextjs.org) (App Router) + React + TypeScript
+- Tailwind CSS
+- [iron-session](https://github.com/vvo/iron-session) for encrypted cookie sessions
+- [zod](https://zod.dev) for input validation
+- Spotify Web API (OAuth Authorization Code + PKCE) and the public Deezer API (BPM and audio previews)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Requirements
 
-## Learn More
+- Node.js 20 or newer
+- A Spotify account and an app created in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 
-To learn more about Next.js, take a look at the following resources:
+## Running locally
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Create a Spotify app** in the Developer Dashboard and add this Redirect URI:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```text
+   http://127.0.0.1:3000/api/auth/callback
+   ```
 
-## Deploy on Vercel
+   Spotify does not accept `localhost` as a redirect host, so use `127.0.0.1`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. **Install dependencies**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` from your Spotify app, and generate a session secret:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+   ```
+
+4. **Start the app**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://127.0.0.1:3000](http://127.0.0.1:3000) and sign in with Spotify.
+
+## Scripts
+
+| Command         | Description                  |
+| --------------- | ---------------------------- |
+| `npm run dev`   | Start the development server |
+| `npm run build` | Create a production build    |
+| `npm run start` | Serve the production build   |
+| `npm run lint`  | Run ESLint                   |
+
+## Security
+
+- Tokens never reach the browser: they live in an encrypted, `httpOnly` session cookie
+- OAuth uses PKCE and a random `state` parameter to prevent code interception and CSRF
+- No database: nothing about your account or listening history is stored
+
+## License
+
+[MIT](LICENSE)
