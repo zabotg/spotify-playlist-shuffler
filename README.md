@@ -1,39 +1,39 @@
 # ![Spotify Playlist Shuffler](./assets/banner.svg)
 
-Spotify only has one shuffle and you can't control it. This app connects to your Spotify account, shows your playlists with full audio details (BPM, key, energy, mood and more), reorders them with smarter shuffle modes, analyzes them and suggests new songs. It runs locally on your machine and stores nothing.
+Spread an artist’s tracks across a playlist, smooth out jumps in tempo, or
+build toward a high-energy finish. Preview the order, then save it as a new
+Spotify playlist or apply it to the original.
 
-## Features
+[Setup](#setup) · [Shuffle modes](#shuffle-modes) · [Data sources](#data-sources) · [API](#api)
 
-- **Full track list**: every playlist shown like in Spotify (title, artists, album, added by, date added, duration) plus release year, BPM, key, energy, danceability, mood, acousticness, instrumentalness, loudness and popularity. Search and sort by any column.
-- **30 second previews**: click ▶ on any track. Previews come from Deezer, with the iTunes Search API as a fallback when Deezer doesn't have one.
-- **Shuffle modes**: pure random, artist-balanced, artist spacing, smooth BPM transitions, energy curves and mood sequences. Shuffling runs in the browser, so it's instant. Preview the new order, sort it, then overwrite the playlist or save it as a new one.
-- **Insights**: total duration, artist diversity, release decades, top artists, top genres, average BPM, mood and audio characteristics.
-- **Discover**: suggests songs from artists related to the ones in your playlist and adds the ones you pick.
-- **Safe overwrite**: refuses to overwrite playlists that contain local files or podcast episodes, because Spotify can't add them back.
+## Shuffle modes
 
-## Where the data comes from
+| Mode | When to use it |
+| --- | --- |
+| Pure random | You want a fresh order with no musical constraints. |
+| Artist-balanced | You want a more even mix of artists throughout the playlist. |
+| Artist spacing | You want more space between tracks by the same artist. |
+| Smooth BPM transitions | You want the tempo to change gradually between tracks. |
+| Energy curves | You want the energy to follow a particular shape. |
+| Mood sequences | You want the mood to guide what plays next. |
 
-Spotify removed audio features, popularity and recommendations from its API for new apps, so the app combines free public APIs. None of them need an API key.
+Shuffle runs in your browser. You can sort the result before saving.
+The app blocks overwrites for playlists with local files or podcast episodes
+because Spotify can’t add those items back.
 
-| Data                                                | Source                                                                              |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Playlists, tracks, who added them, artist genres    | [Spotify Web API](https://developer.spotify.com/documentation/web-api)              |
-| Tempo, key, energy, danceability, mood, loudness... | [ReccoBeats](https://reccobeats.com) (by Spotify track ID)                          |
-| BPM fallback and popularity (Deezer rank)           | [Deezer API](https://developers.deezer.com/api) (by ISRC)                           |
-| 30 second previews                                  | Deezer, then [iTunes Search API](https://performance-partners.apple.com/search-api) |
-| Related artists for Discover                        | Deezer                                                                              |
+## Explore a playlist
 
-### How it stays fast
-
-- The track list loads from Spotify and ReccoBeats right away. Deezer details (BPM fallback and popularity) load in the background in batches and fill in the table as they arrive, with progress shown under the playlist title.
-- Deezer allows 50 requests every 5 seconds, so its calls go through a rate limiter and are retried instead of failing silently.
-- Results from ReccoBeats, Deezer and user names are cached in memory while the server runs, so opening a playlist again is much faster.
-- Previews are looked up only when you press play.
-- Shuffle and insights are calculated in the browser from the tracks already loaded, with no extra requests.
+- **Tracks** — Search and sort by title, artist, album, contributor, date added,
+  duration or release year. Compare BPM, key, energy, danceability, mood,
+  acousticness, instrumentalness, loudness and popularity where available.
+- **Previews** — Press ▶ to hear a 30-second clip when one is available.
+- **Insights** — See total play time, artist diversity, release decades, top
+  artists and genres, plus average BPM, mood and other audio characteristics.
+- **Discover** — Explore suggestions from related artists and add the songs you like.
 
 ## Setup
 
-**Requirements:** Node.js 20 or newer and a Spotify account. Spotify requires the app owner to have **Premium** for apps in Development Mode.
+**Requirements** — Node.js 20 or newer and a Spotify account. Spotify requires the app owner to have **Premium** for apps in Development Mode.
 
 ### 1. Create a Spotify app
 
@@ -49,7 +49,7 @@ Spotify removed audio features, popularity and recommendations from its API for 
 
 4. Under **Which API/SDKs are you planning to use?**, check **Web API**, accept the terms and save.
 5. Open the app's **Settings** and copy the **Client ID** and **Client secret**.
-6. Optional: to let other people sign in, add their Spotify email under **User Management**. Apps in Development Mode accept up to 5 users.
+6. Optional — to let other people sign in, add their Spotify email under **User Management**. Apps in Development Mode accept up to 5 users.
 
 ### 2. Configure and run
 
@@ -78,7 +78,6 @@ npm run dev
 ```
 
 If you open `localhost:3000` instead, the login redirects you to `127.0.0.1` automatically, because the session cookie has to be on the same host as the Spotify redirect.
-
 `.env` is ignored by git. Never commit it.
 
 ### Troubleshooting
@@ -91,6 +90,26 @@ If you open `localhost:3000` instead, the login redirects you to `127.0.0.1` aut
 | 403 errors after login                            | Your Spotify account isn't in the app's **User Management** list, or the app owner doesn't have Premium |
 | Some tracks have no audio data                    | ReccoBeats doesn't have every track. BPM falls back to Deezer when possible                             |
 | A track shows × on the preview button             | Neither Deezer nor iTunes has a preview for it                                                          |
+
+## Data sources
+
+Spotify supplies the playlist. ReccoBeats, Deezer and iTunes fill in audio details, previews and discovery data without extra API keys.
+
+| Data                                                | Source                                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Playlists, tracks, who added them, artist genres    | [Spotify Web API](https://developer.spotify.com/documentation/web-api)              |
+| Tempo, key, energy, danceability, mood, loudness... | [ReccoBeats](https://reccobeats.com) (by Spotify track ID)                          |
+| BPM fallback and popularity (Deezer rank)           | [Deezer API](https://developers.deezer.com/api) (by ISRC)                           |
+| 30 second previews                                  | Deezer, then [iTunes Search API](https://performance-partners.apple.com/search-api) |
+| Related artists for Discover                        | Deezer                                                                              |
+
+### How it stays fast
+
+- The track list loads from Spotify and ReccoBeats right away. Deezer details (BPM fallback and popularity) load in the background in batches and fill in the table as they arrive, with progress shown under the playlist title.
+- Deezer allows 50 requests every 5 seconds, so its calls go through a rate limiter and are retried instead of failing silently.
+- Results from ReccoBeats, Deezer and user names are cached in memory while the server runs, so opening a playlist again is much faster.
+- Previews are looked up only when you press play.
+- Shuffle and insights are calculated in the browser from the tracks already loaded, with no extra requests.
 
 ## Scripts
 
@@ -145,11 +164,11 @@ proxy.ts                Auth guard and security headers
 
 ## Security
 
-- Tokens never reach the browser: they live in an encrypted, `httpOnly` session cookie
+- An encrypted `HttpOnly` session cookie keeps tokens out of client-side JavaScript
 - OAuth uses PKCE and a random `state` parameter against code interception and CSRF
 - Every request body and query string is validated with zod
 - Strict security headers, including a Content Security Policy
-- No database: nothing about your account or listening history is stored
+- The app runs locally without a database. User names and track lookups are cached in memory while the server runs.
 
 ## License
 
