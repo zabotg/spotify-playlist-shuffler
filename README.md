@@ -8,14 +8,14 @@ Spotify playlist or apply it to the original.
 
 ## Shuffle modes
 
-| Mode | When to use it |
+| Mode | How it works |
 | --- | --- |
-| Pure random | You want a fresh order with no musical constraints. |
-| Artist-balanced | You want a more even mix of artists throughout the playlist. |
-| Artist spacing | You want more space between tracks by the same artist. |
-| Smooth BPM transitions | You want the tempo to change gradually between tracks. |
-| Energy curves | You want the energy to follow a particular shape. |
-| Mood sequences | You want the mood to guide what plays next. |
+| Pure random | Shuffles all tracks at random. |
+| Artist-balanced | Distributes each artist’s tracks more evenly across the playlist. |
+| Artist spacing | Leaves room between songs by the same artist. |
+| Smooth BPM transitions | Keeps tempo changes gradual from one track to the next. |
+| Energy curves | Arranges tracks along an energy curve, such as a gradual build. |
+| Mood sequences | Orders tracks by mood to create a progression. |
 
 Shuffle runs in your browser. You can sort the result before saving.
 The app blocks overwrites for playlists with local files or podcast episodes
