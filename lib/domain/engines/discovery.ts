@@ -1,6 +1,7 @@
-import { primaryArtistId, type AudioFeatures, type Track } from '@/lib/domain/models/playlist';
+import { primaryArtistId, type AudioFeatures, type EnrichedTrack, type Track } from '@/lib/domain/models/playlist';
 import { uniqueBy } from '@/lib/utils/array';
 import { shuffleArray, type RandomSource } from '@/lib/utils/random';
+import { scoreTransition } from './flow';
 import { profileDistance, type SoundProfile } from './similarity';
 
 export interface CandidateSelection {
@@ -90,4 +91,28 @@ export function pickRepresentativeTracks(
     .slice(0, count * 2)
     .map(({ track }) => track);
   return shuffleArray(closest, random).slice(0, count);
+}
+
+/** Score used for candidates without audio data: kept, but after the ones that clearly fit. */
+const UNKNOWN_BRIDGE_SCORE = 0.4;
+
+/**
+ * Orders songs by how well they fit between two tracks: the average of the transition into
+ * the song and the transition out of it (tempo, key and energy). Best first.
+ */
+export function rankBridgeCandidates(
+  from: EnrichedTrack,
+  to: EnrichedTrack,
+  candidates: readonly EnrichedTrack[],
+): EnrichedTrack[] {
+  return candidates
+    .map((candidate) => {
+      const scores = [scoreTransition(from, candidate).score, scoreTransition(candidate, to).score].filter(
+        (score) => score !== null,
+      );
+      const score = scores.length > 0 ? scores.reduce((total, value) => total + value, 0) / scores.length : UNKNOWN_BRIDGE_SCORE;
+      return { candidate, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(({ candidate }) => candidate);
 }

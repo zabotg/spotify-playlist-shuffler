@@ -127,6 +127,16 @@ describe('analyzeTracks', () => {
     expect(reccobeats.analyzeAudio).not.toHaveBeenCalled();
   });
 
+  it('makes analyzed features available to later audio feature lookups', async () => {
+    deezer.searchTrack.mockResolvedValue({ preview: DEEZER_PREVIEW });
+    http.fetchBytes.mockResolvedValue(new ArrayBuffer(8));
+    reccobeats.analyzeAudio.mockResolvedValue(makeFeatures({ id: 'analyzed1', tempo: 133 }));
+    await analyzeTracks([query('analyzed1')]);
+
+    reccobeats.getAudioFeaturesBatch.mockResolvedValue(new Map());
+    expect((await getAudioFeatures(['analyzed1'])).get('analyzed1')?.tempo).toBe(133);
+  });
+
   it('caches tracks without a preview, but retries failed downloads and analyses', async () => {
     deezer.searchTrack.mockResolvedValue(null);
     itunes.findPreview.mockResolvedValue(null);

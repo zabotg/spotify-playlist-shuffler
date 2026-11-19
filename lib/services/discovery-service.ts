@@ -2,7 +2,12 @@ import { getRelatedArtistTopTracks } from '@/lib/clients/deezer/client';
 import { getRecommendations } from '@/lib/clients/reccobeats/client';
 import type { SpotifyClient } from '@/lib/clients/spotify/client';
 import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
-import { pickRepresentativeTracks, rankCandidates, selectNewCandidates } from '@/lib/domain/engines/discovery';
+import {
+  pickRepresentativeTracks,
+  rankBridgeCandidates,
+  rankCandidates,
+  selectNewCandidates,
+} from '@/lib/domain/engines/discovery';
 import { buildSoundProfile } from '@/lib/domain/engines/similarity';
 import type { EnrichedTrack, Track } from '@/lib/domain/models/playlist';
 import { isDefined, uniqueBy } from '@/lib/utils/array';
@@ -13,11 +18,12 @@ const SEED_ARTIST_LIMIT = 5;
 const RELATED_ARTIST_LIMIT = 5;
 const TRACKS_PER_RELATED_ARTIST = 2;
 const MAX_TRACKS_PER_ARTIST = 2;
-/** Ask for more than needed: some suggestions are already in the playlist. */
-const OVERFETCH_FACTOR = 2;
 const SEED_TRACK_COUNT = 5;
 const SIMILAR_PER_SEED = 10;
-const BRIDGE_SUGGESTIONS = 5;
+const BRIDGE_SUGGESTIONS = 3;
+const BRIDGE_PER_SEED = 10;
+/** Candidates scored before keeping the best few. */
+const BRIDGE_CANDIDATE_LIMIT = 30;
 
 /** Full Spotify tracks for IDs, skipping any that fail to load. */
 async function loadTracks(client: SpotifyClient, trackIds: readonly string[]): Promise<Track[]> {
@@ -97,21 +103,38 @@ export async function recommendTracks(
   return withAudioData(selected);
 }
 
-/** Songs that sound like both tracks, to place between them and smooth a rough transition. */
+/**
+ * About 3 songs to place between two tracks to smooth a rough transition. Candidates come from
+ * ReccoBeats (seeded with both tracks and with each one, since it may not know one of them)
+ * and from artists related to both tracks' artists, so there are options even when ReccoBeats
+ * knows neither. They are ranked by how well they lead from the first track into the second.
+ */
 export async function suggestBridgeTracks(
   client: SpotifyClient,
   playlistId: string,
   fromTrackId: string,
   toTrackId: string,
 ): Promise<EnrichedTrack[]> {
-  const [{ items }, ids] = await Promise.all([
-    client.getPlaylistTracks(playlistId),
-    getRecommendations([fromTrackId, toTrackId], BRIDGE_SUGGESTIONS * OVERFETCH_FACTOR),
+  const { items } = await client.getPlaylistTracks(playlistId);
+  const playlistTracks = items.map((item) => item.track);
+  const ends = [fromTrackId, toTrackId].map((id) => playlistTracks.find((track) => track.id === id)).filter(isDefined);
+
+  const [idLists, related] = await Promise.all([
+    Promise.all(
+      [[fromTrackId, toTrackId], [fromTrackId], [toTrackId]].map((seeds) => getRecommendations(seeds, BRIDGE_PER_SEED)),
+    ),
+    relatedArtistTracks(client, ends),
   ]);
-  const selected = selectNewCandidates(await loadTracks(client, ids ?? []), {
-    existingTrackIds: new Set(items.map((item) => item.track.id)),
+  const similar = await loadTracks(client, [...new Set(idLists.flatMap((ids) => ids ?? []))]);
+
+  const existingTrackIds = new Set(playlistTracks.map((track) => track.id));
+  const candidates = selectNewCandidates([...similar, ...related], {
+    existingTrackIds,
     maxPerArtist: 1,
-    limit: BRIDGE_SUGGESTIONS,
+    limit: BRIDGE_CANDIDATE_LIMIT,
   });
-  return withAudioData(selected);
+  const [withData, endsWithData] = await Promise.all([withAudioData(candidates), withAudioData(ends)]);
+  const [from, to] = endsWithData;
+  const ranked = from && to ? rankBridgeCandidates(from, to, withData) : withData;
+  return ranked.slice(0, BRIDGE_SUGGESTIONS);
 }

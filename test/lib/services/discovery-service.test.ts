@@ -75,18 +75,53 @@ describe('recommendTracks', () => {
 });
 
 describe('suggestBridgeTracks', () => {
-  it('suggests songs between two tracks, one per artist, without repeats', async () => {
-    const playlist = [byArtist('a'), byArtist('b')];
-    const first = byArtist('c');
-    const sameArtist = { ...byArtist('c') };
-    mocks.getRecommendations.mockResolvedValue([first.id, sameArtist.id, playlist[0].id]);
-    const client = setup(playlist, { [first.id]: first, [sameArtist.id]: sameArtist, [playlist[0].id]: playlist[0] }, {});
+  beforeEach(() => {
+    mocks.getRelatedArtistTopTracks.mockResolvedValue([]);
+  });
 
-    const result = await suggestBridgeTracks(client, 'p1', playlist[0].id, playlist[1].id);
-    expect(result.map((item) => item.track.id)).toEqual([first.id]);
-    expect(mocks.getRecommendations).toHaveBeenCalledWith([playlist[0].id, playlist[1].id], 10);
+  it('combines both seeds, each seed alone and related artists, and returns the best 3 bridges', async () => {
+    const from = byArtist('a');
+    const to = byArtist('b');
+    const candidates = ['c1', 'c2', 'c3', 'c4'].map((artist) => byArtist(artist));
+    const viaDeezer = byArtist('deezer');
+    mocks.getRecommendations.mockImplementation(async (seeds: string[]) =>
+      seeds.length === 2 ? [candidates[0].id, from.id] : seeds[0] === from.id ? [candidates[1].id, candidates[2].id] : null,
+    );
+    mocks.getRelatedArtistTopTracks.mockResolvedValue([{ title: 'deezer', artistName: 'Deezer' }]);
+    const known = Object.fromEntries([...candidates, from, to].map((track) => [track.id, track]));
+    const features: Record<string, AudioFeatures> = {
+      [from.id]: makeFeatures({ id: from.id, tempo: 100, energy: 0.3, key: 0, mode: 1 }),
+      [to.id]: makeFeatures({ id: to.id, tempo: 140, energy: 0.8, key: 2, mode: 1 }),
+      [candidates[0].id]: makeFeatures({ tempo: 220, energy: 0, key: 6, mode: 1 }),
+      [candidates[1].id]: makeFeatures({ tempo: 120, energy: 0.55, key: 7, mode: 1 }),
+      [candidates[2].id]: makeFeatures({ tempo: 118, energy: 0.5, key: 7, mode: 1 }),
+    };
+    const client = setup([from, to], { ...known, deezer: viaDeezer }, features);
 
-    mocks.getRecommendations.mockResolvedValueOnce(null);
-    expect(await suggestBridgeTracks(client, 'p1', 'x', 'y')).toEqual([]);
+    const result = await suggestBridgeTracks(client, 'p1', from.id, to.id);
+
+    expect(result).toHaveLength(3);
+    expect(result.slice(0, 2).map((item) => item.track.id).sort()).toEqual([candidates[1].id, candidates[2].id].sort());
+    expect(result.map((item) => item.track.id)).not.toContain(from.id);
+    expect(mocks.getRecommendations.mock.calls.map(([seeds]) => seeds)).toEqual([[from.id, to.id], [from.id], [to.id]]);
+    expect(mocks.getRelatedArtistTopTracks).toHaveBeenCalledWith('a', expect.anything());
+  });
+
+  it('still suggests songs from related artists when ReccoBeats knows neither track', async () => {
+    const from = byArtist('a');
+    const to = byArtist('b');
+    const viaDeezer = byArtist('deezer');
+    mocks.getRecommendations.mockResolvedValue(null);
+    mocks.getRelatedArtistTopTracks.mockResolvedValue([{ title: 'deezer', artistName: 'Deezer' }]);
+    const client = setup([from, to], { deezer: viaDeezer }, {});
+
+    expect((await suggestBridgeTracks(client, 'p1', from.id, to.id)).map((item) => item.track.id)).toEqual([viaDeezer.id]);
+  });
+
+  it('returns unranked suggestions when the two tracks are no longer in the playlist', async () => {
+    const suggestion = byArtist('s');
+    mocks.getRecommendations.mockResolvedValue([suggestion.id]);
+    const client = setup([], { [suggestion.id]: suggestion }, {});
+    expect((await suggestBridgeTracks(client, 'p1', 'gone1', 'gone2')).map((item) => item.track.id)).toEqual([suggestion.id]);
   });
 });

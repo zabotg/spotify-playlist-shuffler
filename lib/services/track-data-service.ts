@@ -42,7 +42,7 @@ export interface AnalysisQuery extends PreviewQuery {
   trackId: string;
 }
 
-/** Audio features (ReccoBeats) by Spotify track ID. Unknown tracks are left out of the map. */
+/** Audio features by Spotify track ID (ReccoBeats, or an earlier preview analysis). Unknown tracks are left out. */
 export async function getAudioFeatures(trackIds: readonly string[]): Promise<Map<string, AudioFeatures>> {
   const uniqueIds = [...new Set(trackIds)];
   const missingIds = uniqueIds.filter((id) => !featuresCache.has(id));
@@ -59,7 +59,8 @@ export async function getAudioFeatures(trackIds: readonly string[]): Promise<Map
 
   const featuresById = new Map<string, AudioFeatures>();
   for (const id of uniqueIds) {
-    const features = featuresCache.get(id);
+    // Tracks ReccoBeats doesn't know may already have been analyzed from their preview.
+    const features = featuresCache.get(id) ?? analysisCache.get(id);
     if (features) featuresById.set(id, features);
   }
   return featuresById;

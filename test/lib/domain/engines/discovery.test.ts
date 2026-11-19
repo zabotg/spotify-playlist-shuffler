@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { byArtist, makeFeatures, seededRandom } from '@/test/factories';
+import { byArtist, enrich, makeFeatures, seededRandom } from '@/test/factories';
 import { buildSoundProfile } from '@/lib/domain/engines/similarity';
-import { pickRepresentativeTracks, rankCandidates, selectNewCandidates } from '@/lib/domain/engines/discovery';
+import {
+  pickRepresentativeTracks,
+  rankBridgeCandidates,
+  rankCandidates,
+  selectNewCandidates,
+} from '@/lib/domain/engines/discovery';
 
 describe('selectNewCandidates', () => {
   it('skips tracks already in the playlist and duplicate candidates', () => {
@@ -62,5 +67,19 @@ describe('pickRepresentativeTracks', () => {
   it('picks random tracks without audio data', () => {
     const tracks = [byArtist('a'), byArtist('b'), byArtist('c')];
     expect(pickRepresentativeTracks(tracks, new Map(), null, 2)).toHaveLength(2);
+  });
+});
+
+describe('rankBridgeCandidates', () => {
+  const at = (bpm: number, energy: number, key = 0) =>
+    enrich(byArtist(`${bpm}`), { bpm, features: makeFeatures({ tempo: bpm, energy, key, mode: 1 }) });
+
+  it('prefers songs that lead smoothly from the first track into the second', () => {
+    const from = at(100, 0.3);
+    const to = at(140, 0.8, 2);
+    const middle = at(120, 0.55, 7);
+    const far = at(200, 0.05, 6);
+    const unknown = enrich(byArtist('none'));
+    expect(rankBridgeCandidates(from, to, [far, unknown, middle])).toEqual([middle, unknown, far]);
   });
 });

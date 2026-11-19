@@ -110,13 +110,13 @@ function BridgeFinder({ transition, tracks, playlistId, canEdit, onChanged }: Ed
             disabled={suggestions.isLoading}
             onClick={() => void suggestions.run(playlistId, from.track.id, to.track.id)}
           >
-            {suggestions.isLoading ? 'Searching…' : 'Find a bridge song'}
+            {suggestions.isLoading ? 'Searching…' : 'Find bridge songs'}
           </Button>
         )}
       </div>
       <ErrorAlert message={suggestions.error} />
       {suggestions.data && suggestions.data.tracks.length === 0 && (
-        <p className="text-xs text-zinc-500">No bridge songs found for this pair.</p>
+        <p className="text-xs text-zinc-500">No new songs found to put between these two.</p>
       )}
       {suggestions.data && suggestions.data.tracks.length > 0 && (
         <div className="flex flex-col gap-3">
