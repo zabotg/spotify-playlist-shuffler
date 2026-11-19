@@ -1,4 +1,4 @@
-import { primaryArtistId, type EnrichedTrack } from '@/lib/domain/models/playlist';
+import { primaryArtistId, type AudioFeatures, type EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
   ARTIST_GAP_LIMITS,
   DEFAULT_ENERGY_PROFILE,
@@ -8,7 +8,7 @@ import {
   type ShuffleMode,
   type ShuffleOptions,
 } from '@/lib/domain/models/shuffle';
-import { groupBy, partition } from '@/lib/utils/array';
+import { groupBy } from '@/lib/utils/array';
 import { randomIndex, shuffleArray, type RandomSource } from '@/lib/utils/random';
 import { classifyMoodQuadrant } from './mood';
 
@@ -18,6 +18,22 @@ type Arranger = <T>(sortedAscending: T[]) => T[];
 type Shuffler = (tracks: EnrichedTrack[], options: ShuffleOptions, random: RandomSource) => EnrichedTrack[];
 
 const artistOf = (item: EnrichedTrack) => primaryArtistId(item.track);
+
+interface WithFeatures {
+  item: EnrichedTrack;
+  features: AudioFeatures;
+}
+
+/** Tracks with audio features (paired with them, so no null checks later) and tracks without. */
+function splitByFeatures(tracks: readonly EnrichedTrack[]): [WithFeatures[], EnrichedTrack[]] {
+  const withFeatures: WithFeatures[] = [];
+  const withoutFeatures: EnrichedTrack[] = [];
+  for (const item of tracks) {
+    if (item.features) withFeatures.push({ item, features: item.features });
+    else withoutFeatures.push(item);
+  }
+  return [withFeatures, withoutFeatures];
+}
 
 const evenIndexed = <T>(items: T[]) => items.filter((_, index) => index % 2 === 0);
 const oddIndexed = <T>(items: T[]) => items.filter((_, index) => index % 2 === 1);
@@ -69,13 +85,14 @@ export function artistAwareShuffle(
 }
 
 export function bpmSmoothShuffle(tracks: EnrichedTrack[], random: RandomSource = Math.random): EnrichedTrack[] {
-  const [withBpm, withoutBpm] = partition(tracks, (item) => item.bpm !== null);
+  const withBpm = tracks.flatMap((item) => (item.bpm === null ? [] : [{ item, bpm: item.bpm }]));
   if (withBpm.length === 0) return shuffleArray(tracks, random);
 
   const ascending = withBpm
-    .map((item) => ({ item, sortKey: (item.bpm ?? 0) + (random() - 0.5) * BPM_JITTER }))
+    .map(({ item, bpm }) => ({ item, sortKey: bpm + (random() - 0.5) * BPM_JITTER }))
     .sort((a, b) => a.sortKey - b.sortKey)
     .map(({ item }) => item);
+  const withoutBpm = tracks.filter((item) => item.bpm === null);
 
   return [...toMountainArc(ascending), ...shuffleArray(withoutBpm, random)];
 }
@@ -85,10 +102,10 @@ export function energyCurveShuffle(
   profile: EnergyProfile = DEFAULT_ENERGY_PROFILE,
   random: RandomSource = Math.random,
 ): EnrichedTrack[] {
-  const [withEnergy, withoutEnergy] = partition(tracks, (item) => item.features !== null);
+  const [withEnergy, withoutEnergy] = splitByFeatures(tracks);
   if (withEnergy.length === 0) return shuffleArray(tracks, random);
 
-  const ascending = [...withEnergy].sort((a, b) => (a.features?.energy ?? 0) - (b.features?.energy ?? 0));
+  const ascending = withEnergy.sort((a, b) => a.features.energy - b.features.energy).map(({ item }) => item);
   return [...ENERGY_ARRANGERS[profile](ascending), ...shuffleArray(withoutEnergy, random)];
 }
 
@@ -97,12 +114,12 @@ export function moodShuffle(
   sequence: MoodQuadrant[] = DEFAULT_MOOD_SEQUENCE,
   random: RandomSource = Math.random,
 ): EnrichedTrack[] {
-  const [withFeatures, withoutFeatures] = partition(tracks, (item) => item.features !== null);
-  const byMood = groupBy(withFeatures, ({ features }) =>
-    classifyMoodQuadrant(features?.valence ?? 0, features?.energy ?? 0),
+  const [withFeatures, withoutFeatures] = splitByFeatures(tracks);
+  const byMood = groupBy(withFeatures, ({ features }) => classifyMoodQuadrant(features.valence, features.energy));
+  const sequenced = sequence.flatMap((mood) =>
+    shuffleArray((byMood.get(mood) ?? []).map(({ item }) => item), random),
   );
-  const sequenced = sequence.flatMap((mood) => shuffleArray(byMood.get(mood) ?? [], random));
-  const leftovers = withFeatures.filter((item) => !sequenced.includes(item));
+  const leftovers = withFeatures.map(({ item }) => item).filter((item) => !sequenced.includes(item));
   return [...sequenced, ...shuffleArray([...leftovers, ...withoutFeatures], random)];
 }
 

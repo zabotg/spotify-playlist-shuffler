@@ -18,7 +18,7 @@ function toDecade(year: number): string {
 function averageAudioFeatures(features: AudioFeatures[]): Record<AudioFeatureKey, number> | null {
   if (features.length === 0) return null;
   return Object.fromEntries(
-    AUDIO_FEATURE_KEYS.map((key) => [key, average(features.map((item) => item[key])) ?? 0]),
+    AUDIO_FEATURE_KEYS.map((key) => [key, sum(features.map((item) => item[key])) / features.length]),
   ) as Record<AudioFeatureKey, number>;
 }
 
@@ -30,9 +30,10 @@ export function computeInsights(
   const tracks = items.map((item) => item.track);
   const trackCount = tracks.length;
 
+  // Ranked artists come from the tracks, so trackCount is never 0 here.
   const topArtists = rankArtistsByTrackCount(tracks, TOP_ARTIST_LIMIT).map((artist) => ({
     ...artist,
-    share: trackCount > 0 ? artist.trackCount / trackCount : 0,
+    share: artist.trackCount / trackCount,
   }));
 
   const years = tracks.map((track) => releaseYear(track)).filter(isDefined);

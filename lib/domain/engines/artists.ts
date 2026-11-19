@@ -1,19 +1,18 @@
-import { primaryArtistId, type Artist, type Track } from '@/lib/domain/models/playlist';
-import { countBy, topEntries } from '@/lib/utils/array';
+import type { Artist, Track } from '@/lib/domain/models/playlist';
 
 export interface RankedArtist extends Artist {
   trackCount: number;
 }
 
+/** The most frequent primary artists, most tracks first. */
 export function rankArtistsByTrackCount(tracks: readonly Track[], limit: number): RankedArtist[] {
-  const namesById = new Map(tracks.flatMap((track) => track.artists.slice(0, 1)).map((a) => [a.id, a.name]));
-  const counts = countBy(
-    tracks.filter((track) => track.artists.length > 0),
-    primaryArtistId,
-  );
-  return topEntries(counts, limit).map(([id, trackCount]) => ({
-    id,
-    name: namesById.get(id) ?? id,
-    trackCount,
-  }));
+  const byId = new Map<string, RankedArtist>();
+  for (const track of tracks) {
+    const [artist] = track.artists;
+    if (!artist) continue;
+    const ranked = byId.get(artist.id) ?? { id: artist.id, name: artist.name, trackCount: 0 };
+    ranked.trackCount += 1;
+    byId.set(artist.id, ranked);
+  }
+  return [...byId.values()].sort((a, b) => b.trackCount - a.trackCount).slice(0, limit);
 }

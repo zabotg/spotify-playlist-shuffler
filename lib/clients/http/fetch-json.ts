@@ -35,9 +35,10 @@ export interface FetchJsonOptions {
   toError?: (status: number, responseBody: string) => Error;
 }
 
-function retryDelayMs(response: Response | null, attempt: number): number | null {
-  const backoff = BASE_BACKOFF_MS * 2 ** attempt;
-  if (response?.status !== 429) return backoff;
+/** Backoff for server errors; Retry-After for 429 unless it is too long (then `null`: don't retry). */
+function retryDelayMs(response: Response, attemptIndex: number): number | null {
+  const backoff = BASE_BACKOFF_MS * 2 ** attemptIndex;
+  if (response.status !== 429) return backoff;
 
   const retryAfterSeconds = Number(response.headers.get('Retry-After'));
   if (!(retryAfterSeconds > 0)) return backoff;
@@ -49,53 +50,45 @@ function isTimeoutOrNetworkError(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError');
 }
 
-export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+export function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+  const { headers = {}, json, body } = options;
+  const init: RequestInit = {
+    method: options.method ?? 'GET',
+    headers: json === undefined ? headers : { ...headers, 'Content-Type': 'application/json' },
+    body: json === undefined ? body : JSON.stringify(json),
+    cache: 'no-store',
+    redirect: 'error',
+  };
+  return attempt<T>(url, init, options, 0);
+}
+
+async function attempt<T>(url: string, init: RequestInit, options: FetchJsonOptions, attemptIndex: number): Promise<T> {
   const {
-    method = 'GET',
-    headers = {},
-    json,
-    body,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = DEFAULT_MAX_RETRIES,
     toError = (status, responseBody) => new UpstreamError(status, responseBody),
   } = options;
+  const canRetry = attemptIndex < maxRetries;
 
-  const requestBody = json === undefined ? body : JSON.stringify(json);
-  const requestHeaders = json === undefined ? headers : { ...headers, 'Content-Type': 'application/json' };
-
-  for (let attempt = 0; ; attempt++) {
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method,
-        headers: requestHeaders,
-        body: requestBody,
-        cache: 'no-store',
-        redirect: 'error',
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      const delay = retryDelayMs(null, attempt);
-      if (attempt < maxRetries && delay !== null && isTimeoutOrNetworkError(error)) {
-        await sleep(delay);
-        continue;
-      }
-      throw error;
-    }
-
-    if (RETRYABLE_STATUSES.has(response.status) && attempt < maxRetries) {
-      const delay = retryDelayMs(response, attempt);
-      if (delay !== null) {
-        await response.body?.cancel();
-        await sleep(delay);
-        continue;
-      }
-    }
-
-    const text = await response.text();
-    if (!response.ok) throw toError(response.status, text);
-    return (text ? JSON.parse(text) : undefined) as T;
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    if (!canRetry || !isTimeoutOrNetworkError(error)) throw error;
+    await sleep(BASE_BACKOFF_MS * 2 ** attemptIndex);
+    return attempt<T>(url, init, options, attemptIndex + 1);
   }
+
+  const delay = canRetry && RETRYABLE_STATUSES.has(response.status) ? retryDelayMs(response, attemptIndex) : null;
+  if (delay !== null) {
+    await response.body?.cancel();
+    await sleep(delay);
+    return attempt<T>(url, init, options, attemptIndex + 1);
+  }
+
+  const text = await response.text();
+  if (!response.ok) throw toError(response.status, text);
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 /** Same as {@link fetchJson} but returns `null` instead of throwing, for optional data sources. */

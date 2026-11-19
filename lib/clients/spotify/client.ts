@@ -18,8 +18,7 @@ const toSpotifyError = (status: number, body: string) => new SpotifyApiError(sta
 const playlistItemsPath = (playlistId: string) => `/playlists/${encodeURIComponent(playlistId)}/items`;
 
 function withPagination(path: string, limit: number, offset: number): string {
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}limit=${limit}&offset=${offset}`;
+  return `${path}?limit=${limit}&offset=${offset}`;
 }
 
 /** Spotify Web API client for one access token. It knows nothing about sessions or cookies. */

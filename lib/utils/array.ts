@@ -40,13 +40,6 @@ export function countBy<T, K>(items: readonly T[], keyOf: (item: T) => K): Map<K
   return counts;
 }
 
-export function partition<T>(items: readonly T[], predicate: (item: T) => boolean): [T[], T[]] {
-  const matching: T[] = [];
-  const rest: T[] = [];
-  for (const item of items) (predicate(item) ? matching : rest).push(item);
-  return [matching, rest];
-}
-
 export function uniqueBy<T, K>(items: readonly T[], keyOf: (item: T) => K): T[] {
   const seen = new Set<K>();
   return items.filter((item) => {
