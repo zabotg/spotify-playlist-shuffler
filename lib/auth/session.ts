@@ -4,7 +4,9 @@ import { getEnv } from '@/lib/config/env';
 import { HttpError } from '@/lib/http/errors';
 import type { TokenResponse } from '@/lib/clients/spotify/oauth';
 
-const SESSION_COOKIE_NAME = 'sp_session';
+const isProduction = process.env.NODE_ENV === 'production';
+/** `__Host-` makes the browser reject the cookie unless it is Secure, host-only and on path "/". */
+const SESSION_COOKIE_NAME = isProduction ? '__Host-sp_session' : 'sp_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 
@@ -27,7 +29,7 @@ export function getSessionOptions(): SessionOptions {
     password: getEnv().SESSION_SECRET,
     cookieOptions: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'lax',
       maxAge: SESSION_MAX_AGE_SECONDS,
       path: '/',

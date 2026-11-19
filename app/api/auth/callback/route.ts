@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { LoginError } from '@/lib/auth/login-errors';
 import { applyTokens, getSession } from '@/lib/auth/session';
-import { redirectUrl } from '@/lib/http/request-origin';
+import { appUrl } from '@/lib/config/app-origin';
 import { SpotifyClient } from '@/lib/clients/spotify/client';
 import { exchangeCodeForTokens } from '@/lib/clients/spotify/oauth';
 
 export async function GET(request: NextRequest) {
-  const redirectTo = (path: string) => NextResponse.redirect(redirectUrl(path, request));
+  const redirectTo = (path: string) => NextResponse.redirect(appUrl(path));
   const failWith = (error: LoginError) => redirectTo(`/?error=${error}`);
 
   const { searchParams } = request.nextUrl;
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const tokens = await exchangeCodeForTokens(code, pkceVerifier);
-    const user = await SpotifyClient.withAccessToken(tokens.access_token).getCurrentUser();
+    const user = await new SpotifyClient(tokens.access_token).getCurrentUser();
     applyTokens(session, tokens);
     session.userId = user.id;
     session.displayName = user.displayName ?? undefined;

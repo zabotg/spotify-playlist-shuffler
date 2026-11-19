@@ -1,18 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { generatePkcePair, generateState } from '@/lib/auth/pkce';
 import { getSession } from '@/lib/auth/session';
-import { getEnv } from '@/lib/config/env';
-import { getRequestOrigin } from '@/lib/http/request-origin';
-import { withErrorHandling } from '@/lib/http/route-handler';
 import { buildAuthorizeUrl } from '@/lib/clients/spotify/oauth';
+import { appUrl, getAppOrigin } from '@/lib/config/app-origin';
+import { withErrorHandling } from '@/lib/http/route-handler';
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
-  // The session cookie is bound to the host it was set on, so the login must start on the
-  // same host Spotify will redirect back to (e.g. 127.0.0.1 vs localhost), or the callback
-  // won't see the stored state and PKCE verifier.
-  const callbackOrigin = new URL(getEnv().SPOTIFY_REDIRECT_URI).origin;
-  if (getRequestOrigin(request) !== callbackOrigin) {
-    return NextResponse.redirect(new URL(request.nextUrl.pathname, callbackOrigin));
+  // The session cookie is bound to the host it was set on, so the login has to start on the
+  // host Spotify redirects back to (e.g. 127.0.0.1, not localhost). The redirect target is the
+  // configured origin, never a value taken from the request.
+  if (request.headers.get('host') !== new URL(getAppOrigin()).host) {
+    return NextResponse.redirect(appUrl('/api/auth/login'));
   }
 
   const session = await getSession();

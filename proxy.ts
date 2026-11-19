@@ -1,23 +1,37 @@
 import { getIronSession } from 'iron-session';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionOptions, isAuthenticated, type SpotifySession } from '@/lib/auth/session';
-import { redirectUrl } from '@/lib/http/request-origin';
+import { appUrl } from '@/lib/config/app-origin';
+import { isSafeMethod, isSameOriginRequest } from '@/lib/http/csrf';
 import { withSecurityHeaders } from '@/lib/http/security-headers';
 
-const PROTECTED_PATH_PREFIXES = ['/dashboard', '/playlists'];
+const PROTECTED_PAGE_PREFIXES = ['/dashboard', '/playlists'];
 
-function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+function isProtectedPage(pathname: string): boolean {
+  return PROTECTED_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+function isCrossSiteApiWrite(request: NextRequest): boolean {
+  return (
+    request.nextUrl.pathname.startsWith('/api/') && !isSafeMethod(request.method) && !isSameOriginRequest(request)
+  );
+}
+
+/** Runs before every request: CSRF guard for API writes, auth guard for pages, security headers. */
 export async function proxy(request: NextRequest) {
+  if (isCrossSiteApiWrite(request)) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: 'FORBIDDEN', message: 'Cross-site request blocked.' }, { status: 403 }),
+    );
+  }
+
   const response = NextResponse.next();
-  if (!isProtectedPath(request.nextUrl.pathname)) return withSecurityHeaders(response);
+  if (!isProtectedPage(request.nextUrl.pathname)) return withSecurityHeaders(response);
 
   const session = await getIronSession<SpotifySession>(request, response, getSessionOptions());
   if (isAuthenticated(session)) return withSecurityHeaders(response);
 
-  return withSecurityHeaders(NextResponse.redirect(redirectUrl('/', request)));
+  return withSecurityHeaders(NextResponse.redirect(appUrl('/')));
 }
 
 export const config = {
