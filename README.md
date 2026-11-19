@@ -113,38 +113,51 @@ Spotify supplies the playlist. ReccoBeats, Deezer and iTunes fill in audio detai
 
 ## Scripts
 
-| Command             | Description                            |
-| ------------------- | -------------------------------------- |
-| `npm run dev`       | Start the development server           |
-| `npm run build`     | Create a production build              |
-| `npm run start`     | Serve the production build             |
-| `npm run lint`      | Run ESLint                             |
-| `npm run typecheck` | Run the TypeScript compiler            |
-| `npm run test`      | Run the unit tests                     |
-| `npm run check`     | Run lint, typecheck and tests together |
+| Command                 | Description                                         |
+| ----------------------- | --------------------------------------------------- |
+| `npm run dev`           | Start the development server                        |
+| `npm run build`         | Create a production build                           |
+| `npm run start`         | Serve the production build                          |
+| `npm run lint`          | Run ESLint                                          |
+| `npm run typecheck`     | Run the TypeScript compiler                         |
+| `npm run test`          | Run the unit tests                                  |
+| `npm run test:coverage` | Run the tests with coverage (must stay at 100%)     |
+| `npm run check`         | Run lint, typecheck and tests with coverage         |
+
+### Tests
+
+Unit tests use [Vitest](https://vitest.dev) and never call real APIs: `fetch` is mocked, and the environment comes from `test/setup.ts`, not your `.env`. Coverage is enforced at 100% (lines, branches, functions and statements) for the server code, domain logic, API clients, controllers, the proxy and the pure UI logic. CI runs the same check on every push.
 
 ## Project structure
 
+The code is split in layers. Each one only depends on the layers below it.
+
 ```text
 app/
-  api/                  Route handlers (thin: auth, validate, call a service)
-  dashboard/            Playlist grid
-  playlists/[id]/       Playlist page and its tabs (tracks, shuffle, insights, discover)
-components/ui/          Reusable UI components
+  api/                    Controllers: thin route handlers (auth, validate, call a service)
+  dashboard/              Playlist grid page
+  playlists/[id]/         Playlist page and its tabs (tracks, shuffle, insights, discover)
+    _components/track-table/  Table columns, sorting, rows and preview button
+components/ui/            Reusable UI components
 lib/
-  auth/                 Session, PKCE and login errors
-  config/               Validated environment variables
-  domain/               Core types and constants, no framework code
-  engines/              Pure algorithms: shuffle, insights, discovery
-  services/             Use cases that combine Spotify and the public APIs
-  spotify/              Spotify API client, raw types and mappers
-  reccobeats/           Audio features client
-  deezer/               BPM, popularity, previews and related artists client
-  itunes/               Preview fallback client
-  hooks/                React hooks, including background loading of Deezer details
-  http/                 Error handling, request origin and security headers
-  api/                  Typed client used by the browser
-proxy.ts                Auth guard and security headers
+  domain/
+    models/               Types and small helpers, no framework code
+    engines/              Pure algorithms: shuffle, insights, discovery, mood
+  services/               Use cases: playlists, track data (with caches), users, discovery
+  clients/                Adapters for external APIs
+    http/                 Shared transport: timeouts, bounded retries, JSON
+    spotify/              Spotify Web API, OAuth, raw types and mappers
+    reccobeats/           Audio features
+    deezer/               BPM, popularity, previews and related artists (rate limited)
+    itunes/               Preview fallback
+  http/                   Controller helpers, error mapping, CSRF check, security headers
+  auth/                   Session cookie, PKCE, token refresh
+  config/                 Validated environment, app origin, allowed media hosts
+  validation/             zod schemas for every input
+  api/                    Typed client used by the browser, one file per resource
+  hooks/                  React hooks (async actions, previews, background details)
+  utils/                  Small generic helpers (arrays, caching, rate limiting, formatting)
+proxy.ts                  CSRF guard for API writes, auth guard for pages, security headers
 ```
 
 ## API
@@ -164,11 +177,15 @@ proxy.ts                Auth guard and security headers
 
 ## Security
 
-- An encrypted `HttpOnly` session cookie keeps tokens out of client-side JavaScript
-- OAuth uses PKCE and a random `state` parameter against code interception and CSRF
-- Every request body and query string is validated with zod
-- Strict security headers, including a Content Security Policy
-- The app runs locally without a database. User names and track lookups are cached in memory while the server runs.
+- **Tokens stay on the server.** They live in an encrypted `HttpOnly`, `SameSite=Lax` cookie (`__Host-` prefixed and `Secure` in production). Expired tokens are refreshed once even when several requests arrive together.
+- **OAuth with PKCE and `state`** against code interception and login CSRF. The state is single use.
+- **CSRF protection for API writes.** `POST`/`PUT` requests must come from the app's own origin (`Origin` or `Sec-Fetch-Site`), because `SameSite` alone also trusts other apps on the same host.
+- **No trust in request headers for redirects.** Redirects use the origin from `SPOTIFY_REDIRECT_URI`, never `Host` or `X-Forwarded-Host`.
+- **Validated input everywhere.** Every body, query string and route parameter goes through zod. Bodies over 1 MB are rejected.
+- **Safe external data.** Calls to external APIs have timeouts and bounded retries. Preview URLs are only passed on when they point to the allowed audio hosts. Shared caches are keyed by the request data itself, so one user can't change what another one sees.
+- **Strict headers.** Content Security Policy (with `object-src 'none'` and `frame-ancestors 'none'`), `X-Frame-Options`, `nosniff`, COOP/CORP and HSTS in production.
+- **Errors don't leak.** Clients get generic messages, and upstream response bodies and stack traces are never returned.
+- **No database.** User names and track lookups are cached in memory while the server runs. Nothing is written to disk.
 
 ## License
 
