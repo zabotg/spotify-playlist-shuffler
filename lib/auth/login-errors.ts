@@ -8,6 +8,6 @@ export const LOGIN_ERROR_MESSAGES = {
 export type LoginError = keyof typeof LOGIN_ERROR_MESSAGES;
 
 export function getLoginErrorMessage(code: string | undefined): string | null {
-  if (!code || !(code in LOGIN_ERROR_MESSAGES)) return null;
+  if (!code || !Object.hasOwn(LOGIN_ERROR_MESSAGES, code)) return null;
   return LOGIN_ERROR_MESSAGES[code as LoginError];
 }

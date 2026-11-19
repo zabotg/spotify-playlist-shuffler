@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     await session.save();
     return redirectTo('/dashboard');
   } catch (error) {
-    console.error('[auth/callback] Login failed', error);
+    console.error('[auth/callback] Login failed', error instanceof Error ? error.message : error);
     return failWith('token_exchange_failed');
   }
 }
