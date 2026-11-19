@@ -9,6 +9,7 @@ import {
   bpmSmoothShuffle,
   energyCurveShuffle,
   moodShuffle,
+  shuffleAgain,
   toMountainArc,
 } from '@/lib/domain/engines/shuffle';
 
@@ -146,5 +147,36 @@ describe('shuffle edge cases', () => {
     expect(ids(moodShuffle(tracks))).toEqual(ids(tracks));
     expect(ids(bpmSmoothShuffle(tracks))).toEqual(ids(tracks));
     expect(ids(balancedShuffle(tracks))).toEqual(ids(tracks));
+  });
+});
+
+describe('shuffleAgain', () => {
+  // Close values, like in a real playlist, so the curve modes have room to vary.
+  const tracks = Array.from({ length: 8 }, (_, index) =>
+    enrich(byArtist(`artist-${index}`), { bpm: 100 + index, features: makeFeatures({ energy: 0.5 + index / 100 }) }),
+  );
+
+  it.each(SHUFFLE_MODES)('gives a different order on the next run in %s mode', (mode) => {
+    const random = seededRandom(7);
+    const options = { mode, moodSequence: ['Calm', 'Joyful', 'Intense', 'Melancholic'] as const };
+    const first = shuffleAgain(tracks, { ...options, moodSequence: [...options.moodSequence] }, null, random);
+    const second = shuffleAgain(tracks, { ...options, moodSequence: [...options.moodSequence] }, first, random);
+    expect(ids(second)).toEqual(ids(tracks));
+    expect(second.map((item) => item.track.id)).not.toEqual(first.map((item) => item.track.id));
+  });
+
+  it('changes the order in balanced mode when every artist has a single track', () => {
+    const random = seededRandom(3);
+    const runs = Array.from({ length: 5 }, () => balancedShuffle(tracks, random).map((item) => item.track.id).join());
+    expect(new Set(runs).size).toBeGreaterThan(1);
+  });
+
+  it('accepts the same order when there is no other possible order', () => {
+    const single = [enrich(makeTrack())];
+    expect(shuffleAgain(single, { mode: 'pure_random' }, single)).toEqual(single);
+  });
+
+  it('uses Math.random by default', () => {
+    expect(ids(shuffleAgain(tracks, { mode: 'balanced' }, null))).toEqual(ids(tracks));
   });
 });

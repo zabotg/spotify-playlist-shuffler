@@ -16,7 +16,7 @@ import {
   type ShuffleMode,
   type ShuffleOptions,
 } from '@/lib/domain/models/shuffle';
-import { applyShuffle } from '@/lib/domain/engines/shuffle';
+import { shuffleAgain } from '@/lib/domain/engines/shuffle';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { ENERGY_PROFILE_OPTIONS, MOOD_OPTIONS, SHUFFLE_MODE_DETAILS } from './labels';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';
@@ -150,7 +150,7 @@ export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
   function generatePreview() {
     setSort(DEFAULT_SORT);
     save.reset();
-    setShuffled(applyShuffle(tracks, toShuffleOptions(settings)));
+    setShuffled((previous) => shuffleAgain(tracks, toShuffleOptions(settings), previous));
   }
 
   return (
@@ -198,6 +198,12 @@ export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
             onSave={(destination) => void save.run(destination, orderedTracks.map((item) => item.track.uri))}
           />
 
+          {canEdit && (
+            <p className="text-xs text-zinc-500">
+              Overwriting moves each track into its new place, so &quot;Date added&quot; is kept. Big playlists can take
+              a minute.
+            </p>
+          )}
           <ErrorAlert message={save.error} />
           {save.data && <SpotifyLinkAlert message="Saved!" url={save.data.playlistUrl} />}
         </div>

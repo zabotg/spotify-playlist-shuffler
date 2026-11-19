@@ -12,7 +12,11 @@ import { groupBy } from '@/lib/utils/array';
 import { randomIndex, shuffleArray, type RandomSource } from '@/lib/utils/random';
 import { classifyMoodQuadrant } from './mood';
 
-const BPM_JITTER = 4;
+/** Random spread added before sorting, so each run differs while keeping the overall shape. */
+const BPM_JITTER = 8;
+const ENERGY_JITTER = 0.08;
+/** How many times `shuffleAgain` retries before accepting an identical order. */
+const RESHUFFLE_ATTEMPTS = 5;
 
 type Arranger = <T>(sortedAscending: T[]) => T[];
 type Shuffler = (tracks: EnrichedTrack[], options: ShuffleOptions, random: RandomSource) => EnrichedTrack[];
@@ -49,7 +53,9 @@ const ENERGY_ARRANGERS: Record<EnergyProfile, Arranger> = {
 };
 
 export function balancedShuffle(tracks: EnrichedTrack[], random: RandomSource = Math.random): EnrichedTrack[] {
-  const buckets = [...groupBy(tracks, artistOf).values()]
+  // Buckets are shuffled first: the sort is stable, so artists with the same number of
+  // tracks end up in a random order instead of always in playlist order.
+  const buckets = shuffleArray([...groupBy(tracks, artistOf).values()], random)
     .map((bucket) => shuffleArray(bucket, random))
     .sort((a, b) => b.length - a.length);
   const longestBucket = buckets[0]?.length ?? 0;
@@ -105,7 +111,10 @@ export function energyCurveShuffle(
   const [withEnergy, withoutEnergy] = splitByFeatures(tracks);
   if (withEnergy.length === 0) return shuffleArray(tracks, random);
 
-  const ascending = withEnergy.sort((a, b) => a.features.energy - b.features.energy).map(({ item }) => item);
+  const ascending = withEnergy
+    .map(({ item, features }) => ({ item, sortKey: features.energy + (random() - 0.5) * ENERGY_JITTER }))
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .map(({ item }) => item);
   return [...ENERGY_ARRANGERS[profile](ascending), ...shuffleArray(withoutEnergy, random)];
 }
 
@@ -138,4 +147,25 @@ export function applyShuffle(
   random: RandomSource = Math.random,
 ): EnrichedTrack[] {
   return SHUFFLERS[options.mode](tracks, options, random);
+}
+
+function sameOrder(a: readonly EnrichedTrack[], b: readonly EnrichedTrack[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+/**
+ * Shuffles again, retrying a few times when the result matches the order on screen, so the
+ * "Shuffle again" button always visibly changes something when the playlist allows it.
+ */
+export function shuffleAgain(
+  tracks: EnrichedTrack[],
+  options: ShuffleOptions,
+  previous: readonly EnrichedTrack[] | null,
+  random: RandomSource = Math.random,
+): EnrichedTrack[] {
+  let result = applyShuffle(tracks, options, random);
+  for (let attempt = 1; previous && attempt < RESHUFFLE_ATTEMPTS && sameOrder(result, previous); attempt++) {
+    result = applyShuffle(tracks, options, random);
+  }
+  return result;
 }
