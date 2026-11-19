@@ -1,13 +1,11 @@
-/**
- * POST /api/auth/logout
- * Destroys the session cookie. No DB call needed.
- */
-
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth/session';
+import { withErrorHandling } from '@/lib/http/route-handler';
 
-export async function POST() {
+const SEE_OTHER = 303;
+
+export const POST = withErrorHandling(async (request) => {
   const session = await getSession();
   session.destroy();
-  return NextResponse.json({ success: true });
-}
+  return NextResponse.redirect(new URL('/', request.url), SEE_OTHER);
+});
