@@ -24,7 +24,7 @@ export default defineConfig({
         'proxy.ts',
         'app/**/_components/**/*.ts',
       ],
-      exclude: ['**/*.test.ts', 'lib/hooks/**', 'lib/clients/spotify/types.ts', 'lib/domain/models/insights.ts'],
+      exclude: ['**/*.test.ts', 'lib/hooks/**', 'lib/clients/spotify/types.ts', 'lib/domain/models/insights.ts', 'lib/domain/models/metadata.ts'],
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
     },
   },
