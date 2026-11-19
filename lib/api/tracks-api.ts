@@ -1,4 +1,4 @@
-import type { TrackDetails } from '@/lib/domain/models/playlist';
+import type { AudioFeatures, TrackDetails } from '@/lib/domain/models/playlist';
 import { apiRequest } from './request';
 
 export interface PreviewRequest {
@@ -7,7 +7,20 @@ export interface PreviewRequest {
   artist: string;
 }
 
+export interface AnalysisRequest {
+  trackId: string;
+  isrc: string | null;
+  title: string;
+  artist: string;
+}
+
 export const tracksApi = {
+  analyze: (tracks: AnalysisRequest[]) =>
+    apiRequest<{ features: Record<string, AudioFeatures> }>('/api/tracks/analysis', {
+      method: 'POST',
+      body: { tracks },
+    }),
+
   details: (isrcs: string[]) =>
     apiRequest<{ details: Record<string, TrackDetails> }>('/api/tracks/details', { method: 'POST', body: { isrcs } }),
 

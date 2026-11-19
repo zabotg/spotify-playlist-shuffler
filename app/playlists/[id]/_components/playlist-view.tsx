@@ -1,12 +1,14 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ErrorAlert } from '@/components/ui/alert';
 import { CoverImage } from '@/components/ui/cover-image';
 import { playlistsApi } from '@/lib/api/playlists-api';
-import type { EnrichedTrack, PlaylistSummary } from '@/lib/domain/models/playlist';
+import { withAnalyzedFeatures, type EnrichedTrack, type PlaylistSummary } from '@/lib/domain/models/playlist';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
+import { useAudioAnalysis } from '@/lib/hooks/use-audio-analysis';
 import { useTrackDetails, type TrackDetailsProgress } from '@/lib/hooks/use-track-details';
 import { sum } from '@/lib/utils/array';
 import { formatDuration, pluralize } from '@/lib/utils/format';
@@ -28,9 +30,10 @@ interface PlaylistHeaderProps {
   playlist: PlaylistSummary;
   tracks: EnrichedTrack[] | null;
   progress: TrackDetailsProgress;
+  analysisProgress: TrackDetailsProgress;
 }
 
-function PlaylistHeader({ playlist, tracks, progress }: PlaylistHeaderProps) {
+function PlaylistHeader({ playlist, tracks, progress, analysisProgress }: PlaylistHeaderProps) {
   const featureCount = tracks?.filter((item) => item.features !== null).length ?? 0;
   const facts = [
     playlist.ownerName,
@@ -51,6 +54,8 @@ function PlaylistHeader({ playlist, tracks, progress }: PlaylistHeaderProps) {
           <p className="text-xs text-zinc-500">
             Audio data for {featureCount} of {tracks.length} tracks
             {progress.isLoading && ` · loading BPM and popularity from Deezer (${progress.loaded}/${progress.total})`}
+            {analysisProgress.isLoading &&
+              ` · analyzing previews of tracks without data (${analysisProgress.loaded}/${analysisProgress.total})`}
           </p>
         )}
       </div>
@@ -62,7 +67,13 @@ export function PlaylistView({ playlistId }: { playlistId: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('tracks');
   const playlist = useAsyncAction(playlistsApi.get);
   const trackList = useAsyncAction(playlistsApi.tracks);
-  const { tracks, progress } = useTrackDetails(trackList.data?.tracks ?? null);
+  const serverTracks = trackList.data?.tracks ?? null;
+  const { tracks: tracksWithDetails, progress } = useTrackDetails(serverTracks);
+  const { featuresById, progress: analysisProgress } = useAudioAnalysis(serverTracks);
+  const tracks = useMemo(
+    () => tracksWithDetails && withAnalyzedFeatures(tracksWithDetails, featuresById),
+    [tracksWithDetails, featuresById],
+  );
 
   const runPlaylist = playlist.run;
   const runTracks = trackList.run;
@@ -78,7 +89,8 @@ export function PlaylistView({ playlistId }: { playlistId: string }) {
     <main className="min-h-screen px-6 py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <Link href="/dashboard" className="self-start text-sm text-zinc-400 transition-colors hover:text-white">
-          ← Back
+          <ArrowLeft aria-hidden className="mr-1 inline h-4 w-4" />
+          Back
         </Link>
 
         <ErrorAlert message={playlist.error ?? trackList.error} />
@@ -86,7 +98,12 @@ export function PlaylistView({ playlistId }: { playlistId: string }) {
 
         {playlistData && (
           <>
-            <PlaylistHeader playlist={playlistData.playlist} tracks={tracks} progress={progress} />
+            <PlaylistHeader
+              playlist={playlistData.playlist}
+              tracks={tracks}
+              progress={progress}
+              analysisProgress={analysisProgress}
+            />
 
             <div role="tablist" className="flex border-b border-zinc-800">
               {TABS.map((tab) => (

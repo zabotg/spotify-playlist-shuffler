@@ -88,3 +88,22 @@ describe('fetchJsonOrNull', () => {
     expect(await fetchJsonOrNull('https://api.test/x')).toBeNull();
   });
 });
+
+describe('fetchBytes', () => {
+  it('downloads small files and refuses large or failed ones', async () => {
+    const { fetchBytes } = await import('@/lib/clients/http/fetch-json');
+    const bytes = new Uint8Array([1, 2, 3]);
+    mockFetch(
+      new Response(bytes),
+      new Response(bytes, { headers: { 'content-length': '999' } }),
+      new Response(new Uint8Array(10)),
+      new Response('', { status: 404 }),
+      new TypeError('fetch failed'),
+    );
+    expect(new Uint8Array((await fetchBytes('https://x.test/a.mp3', { maxBytes: 5 }))!)).toEqual(bytes);
+    expect(await fetchBytes('https://x.test/a.mp3', { maxBytes: 5 })).toBeNull();
+    expect(await fetchBytes('https://x.test/a.mp3', { maxBytes: 5 })).toBeNull();
+    expect(await fetchBytes('https://x.test/a.mp3', { maxBytes: 5, timeoutMs: 100 })).toBeNull();
+    expect(await fetchBytes('https://x.test/a.mp3', { maxBytes: 5 })).toBeNull();
+  });
+});

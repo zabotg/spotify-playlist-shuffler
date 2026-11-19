@@ -99,3 +99,23 @@ export async function fetchJsonOrNull<T>(url: string, options: FetchJsonOptions 
     return null;
   }
 }
+
+export interface FetchBytesOptions {
+  maxBytes: number;
+  timeoutMs?: number;
+}
+
+/** Downloads a small binary file (e.g. a 30 second preview). Returns `null` on any failure or if too big. */
+export async function fetchBytes(url: string, { maxBytes, timeoutMs = DEFAULT_TIMEOUT_MS }: FetchBytesOptions): Promise<ArrayBuffer | null> {
+  try {
+    const response = await fetch(url, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok || Number(response.headers.get('content-length')) > maxBytes) {
+      await response.body?.cancel();
+      return null;
+    }
+    const bytes = await response.arrayBuffer();
+    return bytes.byteLength > maxBytes ? null : bytes;
+  } catch {
+    return null;
+  }
+}

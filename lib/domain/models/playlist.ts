@@ -104,3 +104,14 @@ export function releaseYear(track: Pick<Track, 'releaseDate'>): number | null {
   const year = Number(track.releaseDate?.slice(0, 4));
   return year > EARLIEST_VALID_YEAR ? year : null;
 }
+
+/** Fills in audio features computed later (e.g. from the preview) for tracks that had none. */
+export function withAnalyzedFeatures(
+  tracks: readonly EnrichedTrack[],
+  featuresById: Readonly<Record<string, AudioFeatures>>,
+): EnrichedTrack[] {
+  return tracks.map((item) => {
+    const features = item.features ? undefined : featuresById[item.track.id];
+    return features ? { ...item, features, bpm: item.bpm ?? features.tempo } : item;
+  });
+}

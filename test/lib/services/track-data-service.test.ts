@@ -7,12 +7,24 @@ const deezer = vi.hoisted(() => ({
   toTrackDetails: (track: { bpm?: number; rank?: number }) => ({ bpm: track.bpm ?? null, popularity: track.rank ?? null }),
 }));
 const itunes = vi.hoisted(() => ({ findPreview: vi.fn() }));
-const reccobeats = vi.hoisted(() => ({ getAudioFeaturesBatch: vi.fn(), RECCOBEATS_MAX_IDS_PER_REQUEST: 2 }));
+const reccobeats = vi.hoisted(() => ({
+  getAudioFeaturesBatch: vi.fn(),
+  analyzeAudio: vi.fn(),
+  RECCOBEATS_MAX_IDS_PER_REQUEST: 2,
+}));
+const http = vi.hoisted(() => ({ fetchBytes: vi.fn() }));
+vi.mock('@/lib/clients/http/fetch-json', () => http);
 vi.mock('@/lib/clients/deezer/client', () => deezer);
 vi.mock('@/lib/clients/itunes/client', () => itunes);
 vi.mock('@/lib/clients/reccobeats/client', () => reccobeats);
 
-import { findPreviewUrl, getAudioFeatures, getTrackDetails, peekTrackDetails } from '@/lib/services/track-data-service';
+import {
+  analyzeTracks,
+  findPreviewUrl,
+  getAudioFeatures,
+  getTrackDetails,
+  peekTrackDetails,
+} from '@/lib/services/track-data-service';
 
 const DEEZER_PREVIEW = 'https://cdnt-preview.dzcdn.net/a.mp3';
 const ITUNES_PREVIEW = 'https://audio-ssl.itunes.apple.com/b.m4a';
@@ -95,5 +107,37 @@ describe('findPreviewUrl', () => {
   it('drops preview URLs outside the allowed audio hosts', async () => {
     deezer.searchTrack.mockResolvedValue({ preview: 'https://evil.com/a.mp3' });
     expect(await findPreviewUrl({ isrc: null, title: 'Evil', artistName: 'Host' })).toBeNull();
+  });
+});
+
+describe('analyzeTracks', () => {
+  const query = (trackId: string) => ({ trackId, isrc: null, title: `Title ${trackId}`, artistName: 'Artist' });
+
+  it('analyzes the preview of each track and caches the result', async () => {
+    deezer.searchTrack.mockResolvedValue({ preview: DEEZER_PREVIEW });
+    http.fetchBytes.mockResolvedValue(new ArrayBuffer(8));
+    reccobeats.analyzeAudio.mockImplementation(async (id: string) => makeFeatures({ id, key: -1 }));
+
+    const result = await analyzeTracks([query('an1'), query('an2')]);
+    expect(Object.keys(result)).toEqual(['an1', 'an2']);
+    expect(http.fetchBytes).toHaveBeenCalledWith(DEEZER_PREVIEW, { maxBytes: 2 * 1024 * 1024 });
+
+    reccobeats.analyzeAudio.mockClear();
+    await analyzeTracks([query('an1')]);
+    expect(reccobeats.analyzeAudio).not.toHaveBeenCalled();
+  });
+
+  it('caches tracks without a preview, but retries failed downloads and analyses', async () => {
+    deezer.searchTrack.mockResolvedValue(null);
+    itunes.findPreview.mockResolvedValue(null);
+    expect(await analyzeTracks([query('none1')])).toEqual({});
+
+    deezer.searchTrack.mockResolvedValue({ preview: DEEZER_PREVIEW });
+    http.fetchBytes.mockResolvedValueOnce(null).mockResolvedValue(new ArrayBuffer(8));
+    reccobeats.analyzeAudio.mockResolvedValueOnce(null).mockResolvedValue(makeFeatures({ id: 'retry1' }));
+    expect(await analyzeTracks([query('retry1')])).toEqual({});
+    expect(await analyzeTracks([query('retry1')])).toEqual({});
+    expect(Object.keys(await analyzeTracks([query('retry1')]))).toEqual(['retry1']);
+    expect(await analyzeTracks([query('none1')])).toEqual({});
   });
 });

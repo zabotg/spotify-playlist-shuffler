@@ -1,7 +1,8 @@
 import pLimit from 'p-limit';
 import * as deezer from '@/lib/clients/deezer/client';
 import { findPreview as findItunesPreview } from '@/lib/clients/itunes/client';
-import { getAudioFeaturesBatch, RECCOBEATS_MAX_IDS_PER_REQUEST } from '@/lib/clients/reccobeats/client';
+import { analyzeAudio, getAudioFeaturesBatch, RECCOBEATS_MAX_IDS_PER_REQUEST } from '@/lib/clients/reccobeats/client';
+import { fetchBytes } from '@/lib/clients/http/fetch-json';
 import { isAllowedPreviewUrl } from '@/lib/config/media-hosts';
 import type { AudioFeatures, TrackDetails } from '@/lib/domain/models/playlist';
 import { chunk } from '@/lib/utils/array';
@@ -19,16 +20,26 @@ const MAX_CACHED_TRACKS = 50_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHED_PREVIEWS = 5_000;
 const RECCOBEATS_CONCURRENCY = 4;
+const ANALYSIS_CONCURRENCY = 2;
+/** Previews are about 0.5 MB; anything far bigger isn't a preview. */
+const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 
 const featuresCache = new TtlCache<string, AudioFeatures | null>(DAY_MS, MAX_CACHED_TRACKS);
 const detailsCache = new TtlCache<string, TrackDetails | null>(DAY_MS, MAX_CACHED_TRACKS);
 const previewCache = new TtlCache<string, string | null>(PREVIEW_TTL_MS, MAX_CACHED_PREVIEWS);
 const reccoBeatsLimit = pLimit(RECCOBEATS_CONCURRENCY);
+const analysisLimit = pLimit(ANALYSIS_CONCURRENCY);
+/** Features computed from previews, by Spotify track ID. `null`: no preview to analyze. */
+const analysisCache = new TtlCache<string, AudioFeatures | null>(DAY_MS, MAX_CACHED_TRACKS);
 
 export interface PreviewQuery {
   isrc: string | null;
   title: string;
   artistName: string;
+}
+
+export interface AnalysisQuery extends PreviewQuery {
+  trackId: string;
 }
 
 /** Audio features (ReccoBeats) by Spotify track ID. Unknown tracks are left out of the map. */
@@ -99,4 +110,30 @@ export async function findPreviewUrl(query: PreviewQuery): Promise<string | null
   const key = query.isrc ?? `${normalizeForMatch(query.artistName)}|${normalizeForMatch(query.title)}`;
   const url = await previewCache.getOrLoad(key, () => loadPreviewUrl(query));
   return url && isAllowedPreviewUrl(url) ? url : null;
+}
+
+async function loadAnalysis(query: AnalysisQuery): Promise<AudioFeatures | null | undefined> {
+  const url = await findPreviewUrl(query);
+  if (!url) return null;
+  const audio = await fetchBytes(url, { maxBytes: MAX_PREVIEW_BYTES });
+  if (!audio) return undefined;
+  return (await analyzeAudio(query.trackId, audio)) ?? undefined;
+}
+
+/**
+ * Audio features computed from the 30 second preview, for tracks ReccoBeats doesn't know.
+ * Slow (a few seconds per track), so the browser asks for a few tracks at a time.
+ */
+export async function analyzeTracks(queries: readonly AnalysisQuery[]): Promise<Record<string, AudioFeatures>> {
+  const results = await Promise.all(
+    queries.map((query) =>
+      analysisLimit(() => analysisCache.getOrLoad(query.trackId, () => loadAnalysis(query))),
+    ),
+  );
+  const featuresById: Record<string, AudioFeatures> = {};
+  queries.forEach((query, index) => {
+    const features = results[index];
+    if (features) featuresById[query.trackId] = features;
+  });
+  return featuresById;
 }
