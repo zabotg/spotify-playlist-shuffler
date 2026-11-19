@@ -65,7 +65,7 @@ function InsightsReport({ insights }: { insights: PlaylistInsights }) {
                 key={key}
                 label={AUDIO_FEATURE_DISPLAY[key].label}
                 color={AUDIO_FEATURE_DISPLAY[key].color}
-                ratio={insights.audioFeatureAverages?.[key] ?? 0}
+                ratio={(insights.audioFeatureAverages as Record<typeof key, number>)[key]}
               />
             ))}
           </div>

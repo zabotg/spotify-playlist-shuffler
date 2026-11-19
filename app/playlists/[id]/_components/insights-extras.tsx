@@ -81,7 +81,7 @@ export function HiddenGems({ tracks }: { tracks: EnrichedTrack[] }) {
               <span className="font-medium">{track.name}</span>{' '}
               <span className="text-zinc-400">· {track.artists.map((artist) => artist.name).join(', ')}</span>
             </span>
-            <span className="shrink-0 text-xs text-zinc-500 tabular-nums">{formatCompactNumber(popularity ?? 0)}</span>
+            <span className="shrink-0 text-xs text-zinc-500 tabular-nums">{formatCompactNumber(popularity as number)}</span>
           </li>
         ))}
       </ol>
@@ -194,7 +194,7 @@ export function LyricsInsights({ tracks }: { tracks: EnrichedTrack[] }) {
   const languages = topEntries(
     countBy(summaries.map((summary) => summary.language).filter(isDefined), (code) => code),
     TOP_LANGUAGES,
-  ).map(([code, value]) => ({ label: languageNames.of(code) ?? code, value }));
+  ).map(([code, value]) => ({ label: languageNames.of(code) as string, value }));
 
   return (
     <Panel
