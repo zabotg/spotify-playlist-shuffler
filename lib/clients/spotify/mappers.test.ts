@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toPlaylistSummary, toPlaylistTracks } from './mappers';
+import { toPlaylistSummary, toPlaylistTracks, toUser } from './mappers';
 import type { RawTrack } from './types';
 
 function rawTrack(overrides: Partial<RawTrack> = {}): RawTrack {
@@ -58,3 +58,37 @@ describe('toPlaylistSummary', () => {
     expect(summary).toMatchObject({ description: 'Best songs', imageUrl: null, trackCount: 42 });
   });
 });
+
+describe('mapper fallbacks', () => {
+  it('handles missing optional fields', () => {
+    const summary = toPlaylistSummary({
+      id: 'p2',
+      name: 'Old',
+      description: '   ',
+      owner: { id: 'me' },
+      collaborative: true,
+      tracks: { total: 3 },
+    });
+    expect(summary).toMatchObject({ description: null, ownerName: null, trackCount: 3, imageUrl: null });
+    expect(
+      toPlaylistSummary({ id: 'p3', name: 'Empty', description: null, owner: { id: 'me' }, collaborative: false })
+        .trackCount,
+    ).toBe(0);
+  });
+
+  it('maps tracks without album details, ISRC or added info', () => {
+    const { items } = toPlaylistTracks([
+      { item: rawTrack({ album: { name: 'A' }, external_ids: undefined }), added_by: null },
+    ]);
+    expect(items[0]).toMatchObject({
+      track: { releaseDate: null, imageUrl: null, isrc: null },
+      addedAt: null,
+      addedById: null,
+    });
+  });
+
+  it('maps users', () => {
+    expect(toUser({ id: 'u', display_name: null })).toEqual({ id: 'u', displayName: null });
+  });
+});
+

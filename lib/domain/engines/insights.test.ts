@@ -38,3 +38,25 @@ describe('computeInsights', () => {
     expect(computeInsights(tracks, 0, []).averageBpm).toBe(110);
   });
 });
+
+describe('computeInsights edge cases', () => {
+  it('handles an empty playlist without dividing by zero', () => {
+    const insights = computeInsights([], 0, []);
+    expect(insights).toMatchObject({
+      trackCount: 0,
+      explicitRatio: 0,
+      artistDiversityScore: 1,
+      averageReleaseYear: null,
+      averageBpm: null,
+      topArtists: [],
+    });
+  });
+
+  it('computes artist shares and the average release year', () => {
+    const tracks = [enrich(makeTrack({ releaseDate: '2000' })), enrich(makeTrack({ releaseDate: '2010' }))];
+    const insights = computeInsights(tracks, 0, []);
+    expect(insights.topArtists[0]?.share).toBe(1);
+    expect(insights.averageReleaseYear).toBe(2005);
+    expect(insights.releaseYearDistribution).toEqual({ 2000: 1, 2010: 1 });
+  });
+});
