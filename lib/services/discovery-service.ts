@@ -1,24 +1,48 @@
 import { getRelatedArtistTopTracks } from '@/lib/clients/deezer/client';
+import { getRecommendations } from '@/lib/clients/reccobeats/client';
 import type { SpotifyClient } from '@/lib/clients/spotify/client';
 import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
-import { selectNewCandidates } from '@/lib/domain/engines/discovery';
-import type { Track } from '@/lib/domain/models/playlist';
+import { pickRepresentativeTracks, rankCandidates, selectNewCandidates } from '@/lib/domain/engines/discovery';
+import { buildSoundProfile } from '@/lib/domain/engines/similarity';
+import type { EnrichedTrack, Track } from '@/lib/domain/models/playlist';
 import { isDefined, uniqueBy } from '@/lib/utils/array';
+import type { RandomSource } from '@/lib/utils/random';
+import { getAudioFeatures } from './track-data-service';
 
-const SEED_ARTIST_LIMIT = 3;
+const SEED_ARTIST_LIMIT = 5;
 const RELATED_ARTIST_LIMIT = 5;
 const TRACKS_PER_RELATED_ARTIST = 2;
 const MAX_TRACKS_PER_ARTIST = 2;
+/** Ask for more than needed: some suggestions are already in the playlist. */
+const OVERFETCH_FACTOR = 2;
+const SEED_TRACK_COUNT = 5;
+const SIMILAR_PER_SEED = 10;
+const BRIDGE_SUGGESTIONS = 5;
 
-/**
- * Songs from artists related to the playlist's top artists (Deezer), matched on Spotify,
- * without tracks the playlist already has.
- */
-export async function recommendTracks(client: SpotifyClient, playlistId: string, count: number): Promise<Track[]> {
-  const { items } = await client.getPlaylistTracks(playlistId);
-  const tracks = items.map((item) => item.track);
+/** Full Spotify tracks for IDs, skipping any that fail to load. */
+async function loadTracks(client: SpotifyClient, trackIds: readonly string[]): Promise<Track[]> {
+  const tracks = await Promise.all(trackIds.map((id) => client.getTrack(id).catch(() => null)));
+  return tracks.filter(isDefined);
+}
+
+/** Suggestions with their audio data, so they can be compared and previewed like playlist tracks. */
+async function withAudioData(tracks: readonly Track[]): Promise<EnrichedTrack[]> {
+  const featuresById = await getAudioFeatures(tracks.map((track) => track.id));
+  return tracks.map((track) => {
+    const features = featuresById.get(track.id) ?? null;
+    return { track, addedAt: null, addedBy: null, features, bpm: features?.tempo ?? null, popularity: null };
+  });
+}
+
+/** Tracks that sound like each seed (ReccoBeats), one request per seed so styles don't blend. */
+async function similarTracks(client: SpotifyClient, seeds: readonly Track[]): Promise<Track[]> {
+  const idLists = await Promise.all(seeds.map((seed) => getRecommendations([seed.id], SIMILAR_PER_SEED)));
+  return loadTracks(client, [...new Set(idLists.flatMap((ids) => ids ?? []))]);
+}
+
+/** Top tracks of artists related to the playlist's main artists (Deezer), matched on Spotify. */
+async function relatedArtistTracks(client: SpotifyClient, tracks: readonly Track[]): Promise<Track[]> {
   const seedArtists = rankArtistsByTrackCount(tracks, SEED_ARTIST_LIMIT);
-
   const references = await Promise.all(
     seedArtists.map((artist) =>
       getRelatedArtistTopTracks(artist.name, {
@@ -29,10 +53,65 @@ export async function recommendTracks(client: SpotifyClient, playlistId: string,
   );
   const uniqueReferences = uniqueBy(references.flat(), (ref) => `${ref.title}|${ref.artistName}`.toLowerCase());
   const matches = await Promise.all(uniqueReferences.map((ref) => client.searchTrack(ref.title, ref.artistName)));
+  return matches.filter(isDefined);
+}
 
-  return selectNewCandidates(matches.filter(isDefined), {
-    existingTrackIds: new Set(tracks.map((track) => track.id)),
-    maxPerArtist: MAX_TRACKS_PER_ARTIST,
-    limit: count,
+/**
+ * New songs for a playlist. Candidates come from artists related to its main artists (Deezer)
+ * and from tracks that sound like its most typical songs (ReccoBeats). They are then ranked by
+ * how close they are to the playlist's sound, and tracks it already has are left out.
+ */
+export async function recommendTracks(
+  client: SpotifyClient,
+  playlistId: string,
+  count: number,
+  random: RandomSource = Math.random,
+): Promise<EnrichedTrack[]> {
+  const { items } = await client.getPlaylistTracks(playlistId);
+  const tracks = items.map((item) => item.track);
+  const existingTrackIds = new Set(tracks.map((track) => track.id));
+
+  const playlistFeatures = await getAudioFeatures(tracks.map((track) => track.id));
+  const profile = buildSoundProfile([...playlistFeatures.values()]);
+  const seeds = pickRepresentativeTracks(tracks, playlistFeatures, profile, SEED_TRACK_COUNT, random);
+
+  const [related, similar] = await Promise.all([relatedArtistTracks(client, tracks), similarTracks(client, seeds)]);
+  const pool = uniqueBy(
+    [
+      ...related.map((track) => ({ track, fromRelatedArtist: true })),
+      ...similar.map((track) => ({ track, fromRelatedArtist: false })),
+    ],
+    (candidate) => candidate.track.id,
+  ).filter((candidate) => !existingTrackIds.has(candidate.track.id));
+
+  const candidateFeatures = await getAudioFeatures(pool.map((candidate) => candidate.track.id));
+  const ranked = rankCandidates(
+    pool.map((candidate) => ({ ...candidate, features: candidateFeatures.get(candidate.track.id) ?? null })),
+    profile,
+    random,
+  );
+  const selected = selectNewCandidates(
+    ranked.map((candidate) => candidate.track),
+    { existingTrackIds, maxPerArtist: MAX_TRACKS_PER_ARTIST, limit: count },
+  );
+  return withAudioData(selected);
+}
+
+/** Songs that sound like both tracks, to place between them and smooth a rough transition. */
+export async function suggestBridgeTracks(
+  client: SpotifyClient,
+  playlistId: string,
+  fromTrackId: string,
+  toTrackId: string,
+): Promise<EnrichedTrack[]> {
+  const [{ items }, ids] = await Promise.all([
+    client.getPlaylistTracks(playlistId),
+    getRecommendations([fromTrackId, toTrackId], BRIDGE_SUGGESTIONS * OVERFETCH_FACTOR),
+  ]);
+  const selected = selectNewCandidates(await loadTracks(client, ids ?? []), {
+    existingTrackIds: new Set(items.map((item) => item.track.id)),
+    maxPerArtist: 1,
+    limit: BRIDGE_SUGGESTIONS,
   });
+  return withAudioData(selected);
 }

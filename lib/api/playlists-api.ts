@@ -1,8 +1,8 @@
 import type {
   EnrichedPlaylistTracks,
+  EnrichedTrack,
   PlaylistLink,
   PlaylistSummary,
-  Track,
 } from '@/lib/domain/models/playlist';
 import { apiRequest } from './request';
 
@@ -17,7 +17,12 @@ export const playlistsApi = {
   tracks: (playlistId: string) => apiRequest<EnrichedPlaylistTracks>(playlistPath(playlistId, '/tracks')),
 
   recommendations: (playlistId: string, count: number) =>
-    apiRequest<{ tracks: Track[] }>(playlistPath(playlistId, `/recommendations?count=${count}`)),
+    apiRequest<{ tracks: EnrichedTrack[] }>(playlistPath(playlistId, `/recommendations?count=${count}`)),
+
+  bridge: (playlistId: string, fromTrackId: string, toTrackId: string) => {
+    const query = new URLSearchParams({ from: fromTrackId, to: toTrackId });
+    return apiRequest<{ tracks: EnrichedTrack[] }>(playlistPath(playlistId, `/bridge?${query}`));
+  },
 
   replaceTracks: (playlistId: string, uris: string[]) =>
     apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'PUT', body: { uris } }),

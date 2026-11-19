@@ -12,6 +12,8 @@ const services = vi.hoisted(() => ({
   recommendTracks: vi.fn(),
   getTrackDetails: vi.fn(),
   findPreviewUrl: vi.fn(),
+  analyzeTracks: vi.fn(),
+  suggestBridgeTracks: vi.fn(),
 }));
 vi.mock('@/lib/services/spotify-context', () => ({
   getSpotifyContext: vi.fn(async () => ({ client, session: fakeSession() })),
@@ -21,6 +23,8 @@ vi.mock('@/lib/services/discovery-service', () => services);
 vi.mock('@/lib/services/track-data-service', () => services);
 
 import { GET as getGenres } from '@/app/api/artists/genres/route';
+import { GET as getBridge } from '@/app/api/playlists/[id]/bridge/route';
+import { POST as analyze } from '@/app/api/tracks/analysis/route';
 import { GET as getRecommendations } from '@/app/api/playlists/[id]/recommendations/route';
 import { GET as getPlaylist } from '@/app/api/playlists/[id]/route';
 import { GET as getTracks, POST as addPlaylistTracks, PUT as replaceTracks } from '@/app/api/playlists/[id]/tracks/route';
@@ -110,5 +114,20 @@ describe('API routes', () => {
     const response = await getGenres(get('/api/artists/genres?ids=a1'), {});
     expect(await response.json()).toEqual({ genres: [['rock']] });
     expect(client.getArtistGenres).toHaveBeenCalledWith(['a1']);
+  });
+
+  it('POST /api/tracks/analysis analyzes up to 5 tracks', async () => {
+    services.analyzeTracks.mockResolvedValue({ t1: { tempo: 100 } });
+    const body = { tracks: [{ trackId: 't1', isrc: null, title: 'Song', artist: 'Band' }] };
+    const response = await analyze(send('/api/tracks/analysis', 'POST', body), {});
+    expect(await response.json()).toEqual({ features: { t1: { tempo: 100 } } });
+    expect(services.analyzeTracks).toHaveBeenCalledWith([{ trackId: 't1', isrc: null, title: 'Song', artistName: 'Band' }]);
+  });
+
+  it('GET /api/playlists/:id/bridge suggests songs between two tracks', async () => {
+    services.suggestBridgeTracks.mockResolvedValue([]);
+    const response = await getBridge(get('/api/playlists/p1/bridge?from=a1&to=b2'), params());
+    expect(await response.json()).toEqual({ tracks: [] });
+    expect(services.suggestBridgeTracks).toHaveBeenCalledWith(client, 'p1', 'a1', 'b2');
   });
 });

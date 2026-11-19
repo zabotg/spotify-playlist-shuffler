@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   artistGenresQuerySchema,
+  bridgeQuerySchema,
+  trackAnalysisRequestSchema,
   createPlaylistRequestSchema,
   playlistIdSchema,
   previewQuerySchema,
@@ -54,5 +56,14 @@ describe('validation schemas', () => {
     expect(artistGenresQuerySchema.safeParse({ ids: '' }).success).toBe(false);
     expect(artistGenresQuerySchema.safeParse({ ids: 'a,b-c' }).success).toBe(false);
     expect(artistGenresQuerySchema.safeParse({ ids: Array(21).fill('a').join(',') }).success).toBe(false);
+  });
+
+  it('validates analysis batches and bridge queries', () => {
+    const track = { trackId: 'abc', isrc: null, title: 'Song', artist: 'Band' };
+    expect(trackAnalysisRequestSchema.parse({ tracks: [track] }).tracks).toHaveLength(1);
+    expect(trackAnalysisRequestSchema.safeParse({ tracks: Array(6).fill(track) }).success).toBe(false);
+    expect(trackAnalysisRequestSchema.safeParse({ tracks: [{ ...track, trackId: '../x' }] }).success).toBe(false);
+    expect(bridgeQuerySchema.parse({ from: 'a', to: 'b' })).toEqual({ from: 'a', to: 'b' });
+    expect(bridgeQuerySchema.safeParse({ from: 'a' }).success).toBe(false);
   });
 });

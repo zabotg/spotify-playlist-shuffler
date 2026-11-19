@@ -51,6 +51,10 @@ export class SpotifyClient {
     );
   }
 
+  async getTrack(trackId: string): Promise<Track> {
+    return toTrack(await this.request<RawTrack>(`/tracks/${encodeURIComponent(trackId)}`));
+  }
+
   async getArtistGenres(artistIds: readonly string[]): Promise<string[][]> {
     const artists = await Promise.all(
       artistIds.map((id) => this.request<RawArtist>(`/artists/${encodeURIComponent(id)}`)),

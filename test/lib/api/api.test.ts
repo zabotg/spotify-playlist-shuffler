@@ -48,7 +48,7 @@ describe('resource clients', () => {
   });
 
   it('build the right paths and methods', async () => {
-    const fetchMock = mockFetch(...Array.from({ length: 11 }, () => jsonResponse({})));
+    const fetchMock = mockFetch(...Array.from({ length: 13 }, () => jsonResponse({})));
     await playlistsApi.list();
     await playlistsApi.get('p/1');
     await playlistsApi.tracks('p1');
@@ -60,6 +60,8 @@ describe('resource clients', () => {
     await tracksApi.preview({ isrc: 'GBAHS1600463', title: 'A&B', artist: 'C' });
     await tracksApi.preview({ isrc: null, title: 'A', artist: 'C' });
     await artistsApi.genres(['a', 'b/c']);
+    await tracksApi.analyze([{ trackId: 't', isrc: null, title: 'A', artist: 'B' }]);
+    await playlistsApi.bridge('p1', 'a', 'b');
 
     const calls = fetchMock.mock.calls.map(([path, init]) => `${init?.method} ${path}`);
     expect(calls).toEqual([
@@ -74,6 +76,8 @@ describe('resource clients', () => {
       'GET /api/tracks/preview?title=A%26B&artist=C&isrc=GBAHS1600463',
       'GET /api/tracks/preview?title=A&artist=C',
       'GET /api/artists/genres?ids=a,b%2Fc',
+      'POST /api/tracks/analysis',
+      'GET /api/playlists/p1/bridge?from=a&to=b',
     ]);
   });
 });

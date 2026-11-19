@@ -68,6 +68,12 @@ describe('SpotifyClient', () => {
     expect(urlOf(fetchMock, 1)).toBe('https://api.spotify.com/v1/playlists/p1/items?limit=100&offset=0');
   });
 
+  it('gets one track', async () => {
+    const fetchMock = mockFetch(jsonResponse(rawTrack('t9')));
+    expect((await client.getTrack('t9')).id).toBe('t9');
+    expect(urlOf(fetchMock, 0)).toBe('https://api.spotify.com/v1/tracks/t9');
+  });
+
   it('gets artist genres, defaulting to none', async () => {
     mockFetch(jsonResponse({ id: 'a', name: 'A', genres: ['rock'] }), jsonResponse({ id: 'b', name: 'B' }));
     expect(await client.getArtistGenres(['a', 'b'])).toEqual([['rock'], []]);

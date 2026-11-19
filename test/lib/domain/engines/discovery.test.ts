@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { byArtist } from '@/test/factories';
-import { selectNewCandidates } from '@/lib/domain/engines/discovery';
+import { byArtist, makeFeatures, seededRandom } from '@/test/factories';
+import { buildSoundProfile } from '@/lib/domain/engines/similarity';
+import { pickRepresentativeTracks, rankCandidates, selectNewCandidates } from '@/lib/domain/engines/discovery';
 
 describe('selectNewCandidates', () => {
   it('skips tracks already in the playlist and duplicate candidates', () => {
@@ -22,5 +23,44 @@ describe('selectNewCandidates', () => {
     const result = selectNewCandidates(candidates, { existingTrackIds: new Set(), maxPerArtist: 2, limit: 3 });
 
     expect(result.map((track) => track.artists[0]?.id)).toEqual(['a', 'a', 'b']);
+  });
+});
+
+describe('rankCandidates', () => {
+  const profile = buildSoundProfile([makeFeatures({ energy: 0.4 }), makeFeatures({ energy: 0.6 })]);
+
+  it('orders by closeness, prefers related artists and drops what does not fit', () => {
+    const close = { track: byArtist('close'), features: makeFeatures({ energy: 0.5 }), fromRelatedArtist: false };
+    const relatedFar = { track: byArtist('rel'), features: makeFeatures({ energy: 0.6 }), fromRelatedArtist: true };
+    const far = { track: byArtist('far'), features: makeFeatures({ energy: 1, valence: 1, tempo: 220 }), fromRelatedArtist: false };
+    const relatedUnknown = { track: byArtist('unk'), features: null, fromRelatedArtist: true };
+    const unknown = { track: byArtist('none'), features: null, fromRelatedArtist: false };
+
+    const ranked = rankCandidates([far, unknown, relatedUnknown, close, relatedFar], profile, () => 0);
+    expect(ranked).toEqual([relatedFar, close, relatedUnknown]);
+  });
+
+  it('keeps everything when the playlist has no audio data', () => {
+    const unknown = { track: byArtist('none'), features: null, fromRelatedArtist: false };
+    expect(rankCandidates([unknown], null)).toEqual([unknown]);
+  });
+});
+
+describe('pickRepresentativeTracks', () => {
+  it('picks among the tracks closest to the average sound', () => {
+    const typical = byArtist('typical');
+    const odd = byArtist('odd');
+    const noData = byArtist('none');
+    const features = new Map([
+      [typical.id, makeFeatures({ energy: 0.5 })],
+      [odd.id, makeFeatures({ energy: 1 })],
+    ]);
+    const profile = buildSoundProfile([...features.values()]);
+    expect(pickRepresentativeTracks([odd, typical, noData], features, profile, 1, seededRandom())).toEqual([typical]);
+  });
+
+  it('picks random tracks without audio data', () => {
+    const tracks = [byArtist('a'), byArtist('b'), byArtist('c')];
+    expect(pickRepresentativeTracks(tracks, new Map(), null, 2)).toHaveLength(2);
   });
 });

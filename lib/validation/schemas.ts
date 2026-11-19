@@ -5,6 +5,7 @@ const MAX_PLAYLIST_NAME_LENGTH = 100;
 const DEFAULT_RECOMMENDATION_COUNT = 20;
 const MAX_RECOMMENDATION_COUNT = 50;
 export const MAX_DETAILS_ISRCS = 50;
+export const MAX_ANALYSIS_TRACKS = 5;
 const MAX_GENRE_ARTISTS = 20;
 const MAX_TEXT_LENGTH = 300;
 
@@ -43,5 +44,21 @@ export const artistGenresQuerySchema = z.object({
     .transform((value) => value.split(',').filter(Boolean))
     .pipe(z.array(spotifyIdSchema).min(1).max(MAX_GENRE_ARTISTS)),
 });
+
+export const trackAnalysisRequestSchema = z.object({
+  tracks: z
+    .array(
+      z.object({
+        trackId: spotifyIdSchema,
+        isrc: isrcSchema.nullable(),
+        title: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+        artist: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+      }),
+    )
+    .min(1)
+    .max(MAX_ANALYSIS_TRACKS),
+});
+
+export const bridgeQuerySchema = z.object({ from: spotifyIdSchema, to: spotifyIdSchema });
 
 export type CreatePlaylistRequest = z.infer<typeof createPlaylistRequestSchema>;
