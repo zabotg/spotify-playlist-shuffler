@@ -14,6 +14,11 @@ const services = vi.hoisted(() => ({
   findPreviewUrl: vi.fn(),
   analyzeTracks: vi.fn(),
   suggestBridgeTracks: vi.fn(),
+  removeTracksAt: vi.fn(),
+  getTrackMetadata: vi.fn(),
+  getArtistOrigins: vi.fn(),
+  getLyrics: vi.fn(),
+  summarizeLyrics: vi.fn(),
 }));
 vi.mock('@/lib/services/spotify-context', () => ({
   getSpotifyContext: vi.fn(async () => ({ client, session: fakeSession() })),
@@ -21,13 +26,23 @@ vi.mock('@/lib/services/spotify-context', () => ({
 vi.mock('@/lib/services/playlist-service', () => services);
 vi.mock('@/lib/services/discovery-service', () => services);
 vi.mock('@/lib/services/track-data-service', () => services);
+vi.mock('@/lib/services/metadata-service', () => services);
 
 import { GET as getGenres } from '@/app/api/artists/genres/route';
 import { GET as getBridge } from '@/app/api/playlists/[id]/bridge/route';
 import { POST as analyze } from '@/app/api/tracks/analysis/route';
 import { GET as getRecommendations } from '@/app/api/playlists/[id]/recommendations/route';
 import { GET as getPlaylist } from '@/app/api/playlists/[id]/route';
-import { GET as getTracks, POST as addPlaylistTracks, PUT as replaceTracks } from '@/app/api/playlists/[id]/tracks/route';
+import {
+  DELETE as removeTracks,
+  GET as getTracks,
+  POST as addPlaylistTracks,
+  PUT as replaceTracks,
+} from '@/app/api/playlists/[id]/tracks/route';
+import { POST as getOrigins } from '@/app/api/artists/origins/route';
+import { GET as getLyrics } from '@/app/api/tracks/lyrics/route';
+import { POST as summarizeLyrics } from '@/app/api/tracks/lyrics-summary/route';
+import { POST as getMetadata } from '@/app/api/tracks/metadata/route';
 import { GET as listPlaylists, POST as createPlaylist } from '@/app/api/playlists/route';
 import { POST as getDetails } from '@/app/api/tracks/details/route';
 import { GET as getPreview } from '@/app/api/tracks/preview/route';
@@ -78,7 +93,7 @@ describe('API routes', () => {
     await replaceTracks(send('/api/playlists/p1/tracks', 'PUT', { uris }), params());
     await addPlaylistTracks(send('/api/playlists/p1/tracks', 'POST', { uris }), params());
     expect(services.replacePlaylistOrder).toHaveBeenCalledWith(client, 'p1', uris);
-    expect(services.addTracks).toHaveBeenCalledWith(client, 'p1', uris);
+    expect(services.addTracks).toHaveBeenCalledWith(client, 'p1', uris, undefined);
   });
 
   it('GET /api/playlists/:id/recommendations uses the requested count', async () => {
@@ -129,5 +144,32 @@ describe('API routes', () => {
     const response = await getBridge(get('/api/playlists/p1/bridge?from=a1&to=b2'), params());
     expect(await response.json()).toEqual({ tracks: [] });
     expect(services.suggestBridgeTracks).toHaveBeenCalledWith(client, 'p1', 'a1', 'b2');
+  });
+
+  it('POST and DELETE /api/playlists/:id/tracks insert at a position and remove positions', async () => {
+    await addPlaylistTracks(send('/api/playlists/p1/tracks', 'POST', { uris, position: 4 }), params());
+    expect(services.addTracks).toHaveBeenCalledWith(client, 'p1', uris, 4);
+    await removeTracks(send('/api/playlists/p1/tracks', 'DELETE', { positions: [1, 2] }), params());
+    expect(services.removeTracksAt).toHaveBeenCalledWith(client, 'p1', [1, 2]);
+  });
+
+  it('serves MusicBrainz metadata, artist origins and lyrics', async () => {
+    services.getTrackMetadata.mockResolvedValue({});
+    services.getArtistOrigins.mockResolvedValue({});
+    services.getLyrics.mockResolvedValue(null);
+    services.summarizeLyrics.mockResolvedValue({});
+    const mbid = '8f3f4d27-fb26-4c3e-9f2a-1c9b2a7f6e11';
+
+    expect(await (await getMetadata(send('/api/tracks/metadata', 'POST', { isrcs: ['GBAHS1600463'] }), {})).json()).toEqual({ metadata: {} });
+    expect(await (await getOrigins(send('/api/artists/origins', 'POST', { ids: [mbid] }), {})).json()).toEqual({ origins: {} });
+    expect(await (await getLyrics(get('/api/tracks/lyrics?title=A&artist=B&album=C&durationMs=1000'), {})).json()).toEqual({ lyrics: null });
+    expect(services.getLyrics).toHaveBeenCalledWith({ title: 'A', artistName: 'B', albumName: 'C', durationMs: 1000 });
+
+    const body = { tracks: [{ trackId: 't1', title: 'A', artist: 'B', album: '', durationMs: 1 }] };
+    expect(await (await summarizeLyrics(send('/api/tracks/lyrics-summary', 'POST', body), {})).json()).toEqual({ summaries: {} });
+    expect(services.summarizeLyrics).toHaveBeenCalledWith([
+      { trackId: 't1', title: 'A', artistName: 'B', albumName: '', durationMs: 1 },
+    ]);
+    expect((await getOrigins(send('/api/artists/origins', 'POST', { ids: ['not-a-uuid'] }), {})).status).toBe(400);
   });
 });

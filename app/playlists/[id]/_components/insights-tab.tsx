@@ -9,6 +9,7 @@ import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
 import { computeInsights } from '@/lib/domain/engines/insights';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { formatDuration, formatPercent } from '@/lib/utils/format';
+import { DeepInsights, HiddenGems, LyricsInsights } from './insights-extras';
 import { AUDIO_FEATURE_DISPLAY } from './labels';
 
 const MISSING = '—';
@@ -69,7 +70,7 @@ function InsightsReport({ insights }: { insights: PlaylistInsights }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-zinc-500 italic">No audio data found for these tracks.</p>
+          <p className="text-xs text-zinc-500 italic">No audio data found for these tracks yet.</p>
         )}
       </Section>
 
@@ -125,5 +126,12 @@ export function InsightsTab({ tracks, skippedItemCount }: InsightsTabProps) {
   if (!insights) {
     return <p className="py-8 text-center text-sm text-zinc-400">This playlist has no tracks to analyze.</p>;
   }
-  return <InsightsReport insights={insights} />;
+  return (
+    <div className="flex flex-col gap-8">
+      <InsightsReport insights={insights} />
+      <HiddenGems tracks={tracks} />
+      <DeepInsights tracks={tracks} />
+      <LyricsInsights tracks={tracks} />
+    </div>
+  );
 }

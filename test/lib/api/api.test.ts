@@ -48,7 +48,7 @@ describe('resource clients', () => {
   });
 
   it('build the right paths and methods', async () => {
-    const fetchMock = mockFetch(...Array.from({ length: 13 }, () => jsonResponse({})));
+    const fetchMock = mockFetch(...Array.from({ length: 18 }, () => jsonResponse({})));
     await playlistsApi.list();
     await playlistsApi.get('p/1');
     await playlistsApi.tracks('p1');
@@ -62,6 +62,11 @@ describe('resource clients', () => {
     await artistsApi.genres(['a', 'b/c']);
     await tracksApi.analyze([{ trackId: 't', isrc: null, title: 'A', artist: 'B' }]);
     await playlistsApi.bridge('p1', 'a', 'b');
+    await playlistsApi.removeTracks('p1', [1]);
+    await tracksApi.metadata(['ISRC']);
+    await tracksApi.lyricsSummary([{ trackId: 't', title: 'A', artist: 'B', album: '', durationMs: 1 }]);
+    await tracksApi.lyrics({ title: 'A', artist: 'B', album: 'C', durationMs: 5 });
+    await artistsApi.origins(['m']);
 
     const calls = fetchMock.mock.calls.map(([path, init]) => `${init?.method} ${path}`);
     expect(calls).toEqual([
@@ -78,6 +83,11 @@ describe('resource clients', () => {
       'GET /api/artists/genres?ids=a,b%2Fc',
       'POST /api/tracks/analysis',
       'GET /api/playlists/p1/bridge?from=a&to=b',
+      'DELETE /api/playlists/p1/tracks',
+      'POST /api/tracks/metadata',
+      'POST /api/tracks/lyrics-summary',
+      'GET /api/tracks/lyrics?title=A&artist=B&album=C&durationMs=5',
+      'POST /api/artists/origins',
     ]);
   });
 });
