@@ -1,4 +1,5 @@
 import type { SpotifyClient } from '@/lib/clients/spotify/client';
+import { planReorder } from '@/lib/domain/engines/reorder';
 import {
   canEditPlaylist,
   toPlaylistLink,
@@ -50,13 +51,17 @@ export async function loadEnrichedTracks(
   return { tracks, skippedItemCount };
 }
 
-/** Refuses to overwrite playlists with items Spotify can't add back (local files, episodes). */
+/**
+ * Saves a new track order by moving tracks, never by removing and re-adding them, so each
+ * track keeps its "date added". Playlists with local files or episodes are refused because
+ * the app can't see where those items sit.
+ */
 export async function replacePlaylistOrder(
   client: SpotifyClient,
   playlistId: string,
   uris: readonly string[],
 ): Promise<PlaylistLink> {
-  const { skippedItemCount } = await client.getPlaylistTracks(playlistId);
+  const { items, skippedItemCount } = await client.getPlaylistTracks(playlistId);
   if (skippedItemCount > 0) {
     throw new HttpError(
       409,
@@ -64,7 +69,18 @@ export async function replacePlaylistOrder(
       `This playlist has ${skippedItemCount} local files, episodes or unavailable items that would be lost. Save as a new playlist instead.`,
     );
   }
-  await client.replacePlaylistTracks(playlistId, uris);
+
+  const moves = planReorder(
+    items.map((item) => item.track.uri),
+    uris,
+  );
+  if (!moves) {
+    throw new HttpError(409, 'CONFLICT', 'The playlist changed since it was loaded. Reload the page and try again.');
+  }
+
+  // Moves depend on the previous ones, so they run in order, each on the latest snapshot.
+  let snapshotId: string | undefined;
+  for (const move of moves) snapshotId = await client.moveItems(playlistId, move, snapshotId);
   return toPlaylistLink(playlistId);
 }
 

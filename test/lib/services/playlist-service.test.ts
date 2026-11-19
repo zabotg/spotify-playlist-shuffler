@@ -19,7 +19,7 @@ function fakeClient(overrides: Partial<Record<keyof SpotifyClient, unknown>> = {
   return {
     getAllPlaylists: vi.fn(),
     getPlaylistTracks: vi.fn(),
-    replacePlaylistTracks: vi.fn(),
+    moveItems: vi.fn(),
     addTracksToPlaylist: vi.fn(),
     createPlaylist: vi.fn(),
     ...overrides,
@@ -66,22 +66,43 @@ describe('playlist service', () => {
     expect(users.resolveDisplayNames).toHaveBeenCalledWith(client, ['me', 'ghost'], { id: 'me', displayName: 'Me' });
   });
 
+  const playlistOf = (...ids: string[]) => ({
+    items: ids.map((id) => ({ track: makeTrack({ uri: `spotify:track:${id}` }), addedAt: null, addedById: null })),
+    skippedItemCount: 0,
+  });
+  const uris = (...ids: string[]) => ids.map((id) => `spotify:track:${id}`);
+
   it('refuses to overwrite playlists with items Spotify cannot add back', async () => {
     const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue({ items: [], skippedItemCount: 2 }) });
-    await expect(replacePlaylistOrder(client, 'p1', ['spotify:track:a'])).rejects.toMatchObject({
-      status: 409,
-      code: 'CONFLICT',
-    });
-    expect(client.replacePlaylistTracks).not.toHaveBeenCalled();
+    await expect(replacePlaylistOrder(client, 'p1', uris('a'))).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
+    expect(client.moveItems).not.toHaveBeenCalled();
   });
 
-  it('replaces the order when it is safe', async () => {
-    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue({ items: [], skippedItemCount: 0 }) });
-    expect(await replacePlaylistOrder(client, 'p1', ['spotify:track:a'])).toEqual({
+  it('refuses when the playlist changed since it was loaded', async () => {
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b')) });
+    await expect(replacePlaylistOrder(client, 'p1', uris('a', 'c'))).rejects.toMatchObject({
+      status: 409,
+      message: 'The playlist changed since it was loaded. Reload the page and try again.',
+    });
+    expect(client.moveItems).not.toHaveBeenCalled();
+  });
+
+  it('moves tracks into the new order, chaining snapshots, without re-adding them', async () => {
+    const moveItems = vi.fn().mockResolvedValueOnce('s1').mockResolvedValueOnce('s2');
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b', 'c')), moveItems });
+
+    expect(await replacePlaylistOrder(client, 'p1', uris('c', 'a', 'b'))).toEqual({
       playlistId: 'p1',
       playlistUrl: 'https://open.spotify.com/playlist/p1',
     });
-    expect(client.replacePlaylistTracks).toHaveBeenCalledWith('p1', ['spotify:track:a']);
+    expect(moveItems.mock.calls).toEqual([['p1', { rangeStart: 2, rangeLength: 1, insertBefore: 0 }, undefined]]);
+    expect(client.addTracksToPlaylist).not.toHaveBeenCalled();
+  });
+
+  it('makes no requests when the order did not change', async () => {
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b')) });
+    await replacePlaylistOrder(client, 'p1', uris('a', 'b'));
+    expect(client.moveItems).not.toHaveBeenCalled();
   });
 
   it('adds tracks and creates playlists', async () => {

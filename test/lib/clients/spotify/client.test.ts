@@ -92,21 +92,30 @@ describe('SpotifyClient', () => {
     });
   });
 
-  it('replaces tracks in batches of 100, keeping their order', async () => {
+  it('adds tracks in batches of 100, one after another, keeping their order', async () => {
     const uris = Array.from({ length: 250 }, (_, index) => `spotify:track:t${index}`);
     const fetchMock = mockFetch(jsonResponse({}), jsonResponse({}), jsonResponse({}));
-    await client.replacePlaylistTracks('p1', uris);
+    await client.addTracksToPlaylist('p1', uris);
 
     const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).uris as string[]);
-    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['PUT', 'POST', 'POST']);
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'POST', 'POST']);
     expect(bodies.map((batch) => batch.length)).toEqual([100, 100, 50]);
     expect(bodies.flat()).toEqual(uris);
   });
 
-  it('clears the playlist when replacing with no tracks', async () => {
-    const fetchMock = mockFetch(jsonResponse({}));
-    await client.replacePlaylistTracks('p1', []);
-    expect(initOf(fetchMock, 0)).toMatchObject({ method: 'PUT', body: '{"uris":[]}' });
+  it('moves a range of items and returns the new snapshot', async () => {
+    const fetchMock = mockFetch(jsonResponse({ snapshot_id: 's2' }), jsonResponse({ snapshot_id: 's3' }));
+    const move = { rangeStart: 5, rangeLength: 2, insertBefore: 0 };
+
+    expect(await client.moveItems('p1', move)).toBe('s2');
+    expect(await client.moveItems('p1', move, 's2')).toBe('s3');
+
+    expect(initOf(fetchMock, 0)).toMatchObject({
+      method: 'PUT',
+      body: JSON.stringify({ range_start: 5, range_length: 2, insert_before: 0 }),
+    });
+    expect(JSON.parse(String(initOf(fetchMock, 1)?.body))).toMatchObject({ snapshot_id: 's2' });
+    expect(urlOf(fetchMock, 0)).toBe('https://api.spotify.com/v1/playlists/p1/items');
   });
 
   it('throws SpotifyApiError for failed requests', async () => {

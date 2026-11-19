@@ -1,5 +1,6 @@
 import pLimit from 'p-limit';
 import { fetchJson, type FetchJsonOptions } from '@/lib/clients/http/fetch-json';
+import type { ReorderMove } from '@/lib/domain/engines/reorder';
 import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/models/playlist';
 import { chunk, isDefined, range } from '@/lib/utils/array';
 import { SpotifyApiError } from './errors';
@@ -72,11 +73,18 @@ export class SpotifyClient {
     return toPlaylistSummary(playlist);
   }
 
-  /** Spotify accepts 100 URIs per call: the first batch replaces, the rest are appended in order. */
-  async replacePlaylistTracks(playlistId: string, uris: readonly string[]): Promise<void> {
-    const [firstBatch = [], ...remainingBatches] = chunk(uris, WRITE_BATCH_SIZE);
-    await this.request(playlistItemsPath(playlistId), { method: 'PUT', json: { uris: firstBatch } });
-    await this.addTracksToPlaylist(playlistId, remainingBatches.flat());
+  /** Moves a range of items. Moving keeps their "date added". Returns the new snapshot ID. */
+  async moveItems(playlistId: string, move: ReorderMove, snapshotId?: string): Promise<string> {
+    const { snapshot_id } = await this.request<{ snapshot_id: string }>(playlistItemsPath(playlistId), {
+      method: 'PUT',
+      json: {
+        range_start: move.rangeStart,
+        range_length: move.rangeLength,
+        insert_before: move.insertBefore,
+        ...(snapshotId ? { snapshot_id: snapshotId } : {}),
+      },
+    });
+    return snapshot_id;
   }
 
   /** Batches run one after another so the tracks keep their order. */
