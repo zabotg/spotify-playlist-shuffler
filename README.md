@@ -1,4 +1,4 @@
-# Spotify Playlist Shuffler
+# ![Spotify Playlist Shuffler](./assets/banner.svg)
 
 Spotify only has one shuffle and you can't control it. This app connects to your Spotify account, shows your playlists with full audio details (BPM, key, energy, mood and more), reorders them with smarter shuffle modes, analyzes them and suggests new songs. It runs locally on your machine and stores nothing.
 

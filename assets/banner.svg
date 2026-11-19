@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="200" viewBox="0 0 1000 200" role="img" aria-labelledby="title">
+<title id="title">Spotify Playlist Shuffler</title>
+<defs><linearGradient id="bg"><stop stop-color="#101713"/><stop offset="1" stop-color="#173426"/></linearGradient></defs>
+<style>
+.track { animation: shuffle 9s ease-in-out infinite; }
+@keyframes shuffle {0%,20%,100% {transform:translateY(0)} 32%,52% {transform:translateY(var(--a))} 64%,84% {transform:translateY(var(--b))}}
+.bar { transform-box: fill-box; transform-origin: center bottom; animation: pulse var(--period) ease-in-out infinite alternate; }
+@keyframes pulse { from { transform: scaleY(.34); } to { transform: scaleY(1); } }
+.spectrum .bar { transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .track, .bar {animation:none} }
+</style>
+<rect width="1000" height="200" rx="16" fill="url(#bg)"/>
+<text x="52" y="89" font-family="Arial,sans-serif" font-weight="700" font-size="47" fill="#fff">Spotify Playlist <tspan fill="#1ED760">Shuffler</tspan></text>
+<g class="spectrum" transform="translate(19 40) scale(.63 .70)" fill="#52B977">
+<rect class="bar" x="53" y="136" width="4" height="4" rx="2" style="--period:635ms;animation-delay:-0ms"/>
+<rect class="bar" x="62" y="134" width="4" height="8" rx="2" style="--period:720ms;animation-delay:-124ms"/>
+<rect class="bar" x="71" y="129" width="4" height="18" rx="2" style="--period:795ms;animation-delay:-248ms"/>
+<rect class="bar" x="80" y="129" width="4" height="18" rx="2" style="--period:852ms;animation-delay:-372ms"/>
+<rect class="bar" x="89" y="127.5" width="4" height="21" rx="2" style="--period:884ms;animation-delay:-496ms"/>
+<rect class="bar" x="98" y="125" width="4" height="26" rx="2" style="--period:887ms;animation-delay:-620ms"/>
+<rect class="bar" x="107" y="126.5" width="4" height="23" rx="2" style="--period:862ms;animation-delay:-744ms"/>
+<rect class="bar" x="116" y="126" width="4" height="24" rx="2" style="--period:810ms;animation-delay:-868ms"/>
+<rect class="bar" x="125" y="120" width="4" height="36" rx="2" style="--period:739ms;animation-delay:-92ms"/>
+<rect class="bar" x="134" y="120" width="4" height="36" rx="2" style="--period:655ms;animation-delay:-216ms"/>
+<rect class="bar" x="143" y="123.5" width="4" height="29" rx="2" style="--period:569ms;animation-delay:-340ms"/>
+<rect class="bar" x="152" y="119.5" width="4" height="37" rx="2" style="--period:491ms;animation-delay:-464ms"/>
+<rect class="bar" x="161" y="121.5" width="4" height="33" rx="2" style="--period:429ms;animation-delay:-588ms"/>
+<rect class="bar" x="170" y="131" width="4" height="14" rx="2" style="--period:390ms;animation-delay:-712ms"/>
+<rect class="bar" x="179" y="133.5" width="4" height="9" rx="2" style="--period:380ms;animation-delay:-836ms"/>
+<rect class="bar" x="188" y="125" width="4" height="26" rx="2" style="--period:398ms;animation-delay:-60ms"/>
+<rect class="bar" x="197" y="119" width="4" height="38" rx="2" style="--period:444ms;animation-delay:-184ms"/>
+<rect class="bar" x="206" y="121" width="4" height="34" rx="2" style="--period:512ms;animation-delay:-308ms"/>
+<rect class="bar" x="215" y="121.5" width="4" height="33" rx="2" style="--period:593ms;animation-delay:-432ms"/>
+<rect class="bar" x="224" y="128" width="4" height="20" rx="2" style="--period:679ms;animation-delay:-556ms"/>
+<rect class="bar" x="233" y="131.5" width="4" height="13" rx="2" style="--period:760ms;animation-delay:-680ms"/>
+<rect class="bar" x="242" y="130" width="4" height="16" rx="2" style="--period:827ms;animation-delay:-804ms"/>
+<rect class="bar" x="251" y="128" width="4" height="20" rx="2" style="--period:872ms;animation-delay:-28ms"/>
+<rect class="bar" x="260" y="129" width="4" height="18" rx="2" style="--period:889ms;animation-delay:-152ms"/>
+<rect class="bar" x="269" y="127" width="4" height="22" rx="2" style="--period:878ms;animation-delay:-276ms"/>
+<rect class="bar" x="278" y="124.5" width="4" height="27" rx="2" style="--period:838ms;animation-delay:-400ms"/>
+<rect class="bar" x="287" y="129.5" width="4" height="17" rx="2" style="--period:775ms;animation-delay:-524ms"/>
+<rect class="bar" x="296" y="133" width="4" height="10" rx="2" style="--period:696ms;animation-delay:-648ms"/>
+<rect class="bar" x="305" y="133" width="4" height="10" rx="2" style="--period:610ms;animation-delay:-772ms"/>
+<rect class="bar" x="314" y="126.5" width="4" height="23" rx="2" style="--period:527ms;animation-delay:-896ms"/>
+<rect class="bar" x="323" y="124" width="4" height="28" rx="2" style="--period:456ms;animation-delay:-120ms"/>
+<rect class="bar" x="332" y="123" width="4" height="30" rx="2" style="--period:406ms;animation-delay:-244ms"/>
+<rect class="bar" x="341" y="129.5" width="4" height="17" rx="2" style="--period:381ms;animation-delay:-368ms"/>
+<rect class="bar" x="350" y="134.5" width="4" height="7" rx="2" style="--period:386ms;animation-delay:-492ms"/>
+<rect class="bar" x="359" y="134.5" width="4" height="7" rx="2" style="--period:419ms;animation-delay:-616ms"/>
+<rect class="bar" x="368" y="134" width="4" height="8" rx="2" style="--period:477ms;animation-delay:-740ms"/>
+<rect class="bar" x="377" y="134.5" width="4" height="7" rx="2" style="--period:553ms;animation-delay:-864ms"/>
+<rect class="bar" x="386" y="135" width="4" height="6" rx="2" style="--period:638ms;animation-delay:-88ms"/>
+<rect class="bar" x="395" y="135.5" width="4" height="5" rx="2" style="--period:723ms;animation-delay:-212ms"/>
+<rect class="bar" x="404" y="136" width="4" height="4" rx="2" style="--period:798ms;animation-delay:-336ms"/>
+</g>
+<g transform="translate(676 34)"><g class="track" style="--a:90px;--b:45px"><rect width="270" height="37" rx="8" fill="#16231B" stroke="#365443"/><rect x="18" y="11" width="120" height="5" rx="2.5" fill="#1ED760"/><rect x="18" y="22" width="70" height="3" rx="1.5" fill="#63806C"/><text x="237" y="23" fill="#1ED760" font-size="12" font-family="monospace">01</text></g></g>
+<g transform="translate(676 79)"><g class="track" style="--a:-45px;--b:45px"><rect width="270" height="37" rx="8" fill="#16231B" stroke="#365443"/><rect x="18" y="11" width="88" height="5" rx="2.5" fill="#A4EDB8"/><rect x="18" y="22" width="56" height="3" rx="1.5" fill="#63806C"/><text x="237" y="23" fill="#A4EDB8" font-size="12" font-family="monospace">02</text></g></g>
+<g transform="translate(676 124)"><g class="track" style="--a:-45px;--b:-90px"><rect width="270" height="37" rx="8" fill="#16231B" stroke="#365443"/><rect x="18" y="11" width="108" height="5" rx="2.5" fill="#50876B"/><rect x="18" y="22" width="63" height="3" rx="1.5" fill="#63806C"/><text x="237" y="23" fill="#50876B" font-size="12" font-family="monospace">03</text></g></g>
+</svg>
