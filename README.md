@@ -23,17 +23,17 @@ because Spotify can’t add those items back.
 
 ## Explore a playlist
 
-- **Tracks** — Search and sort by title, artist, album, contributor, date added,
+- **Tracks:** Search and sort by title, artist, album, contributor, date added,
   duration or release year. Compare BPM, key, energy, danceability, mood,
   acousticness, instrumentalness, loudness and popularity where available.
-- **Previews** — Press ▶ to hear a 30-second clip when one is available.
-- **Insights** — See total play time, artist diversity, release decades, top
+- **Previews:** Press ▶ to hear a 30-second clip when one is available.
+- **Insights:** See total play time, artist diversity, release decades, top
   artists and genres, plus average BPM, mood and other audio characteristics.
-- **Discover** — Explore suggestions from related artists and add the songs you like.
+- **Discover:** Explore suggestions from related artists and add the songs you like.
 
 ## Setup
 
-**Requirements** — Node.js 20 or newer and a Spotify account. Spotify requires the app owner to have **Premium** for apps in Development Mode.
+**Requirements:** Node.js 20 or newer and a Spotify account. Spotify requires the app owner to have **Premium** for apps in Development Mode.
 
 ### 1. Create a Spotify app
 
@@ -49,7 +49,7 @@ because Spotify can’t add those items back.
 
 4. Under **Which API/SDKs are you planning to use?**, check **Web API**, accept the terms and save.
 5. Open the app's **Settings** and copy the **Client ID** and **Client secret**.
-6. Optional — to let other people sign in, add their Spotify email under **User Management**. Apps in Development Mode accept up to 5 users.
+6. Optional: to let other people sign in, add their Spotify email under **User Management**. Apps in Development Mode accept up to 5 users.
 
 ### 2. Configure and run
 
