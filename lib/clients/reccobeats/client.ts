@@ -1,5 +1,5 @@
 import pLimit from 'p-limit';
-import type { AudioFeatures } from '@/lib/domain/playlist';
+import type { AudioFeatures } from '@/lib/domain/models/playlist';
 import { chunk } from '@/lib/utils/array';
 import { sleep } from '@/lib/utils/async';
 import { TtlCache } from '@/lib/utils/ttl-cache';

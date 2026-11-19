@@ -1,4 +1,4 @@
-import type { PlaylistItem, PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
+import type { PlaylistItem, PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/models/playlist';
 import type {
   RawImage,
   RawPlaylist,
@@ -6,7 +6,7 @@ import type {
   RawPlaylistItem,
   RawTrack,
   RawUser,
-} from '@/lib/spotify/types';
+} from '@/lib/clients/spotify/types';
 
 const HTML_TAG_PATTERN = /<[^>]+>/g;
 

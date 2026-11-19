@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { tracksApi } from '@/lib/api/client';
-import type { EnrichedTrack, TrackDetails } from '@/lib/domain/playlist';
+import type { EnrichedTrack, TrackDetails } from '@/lib/domain/models/playlist';
 import { chunk, isDefined } from '@/lib/utils/array';
 
 /** Must match MAX_DETAILS_ISRCS in the API validation. */

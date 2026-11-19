@@ -1,4 +1,4 @@
-import type { AudioFeatures, EnrichedTrack, Track } from '@/lib/domain/playlist';
+import type { AudioFeatures, EnrichedTrack, Track } from '@/lib/domain/models/playlist';
 import type { RandomSource } from '@/lib/utils/random';
 
 let nextId = 0;

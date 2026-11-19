@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { EnrichedTrack } from '@/lib/domain/playlist';
-import { SHUFFLE_MODES } from '@/lib/domain/shuffle';
+import type { EnrichedTrack } from '@/lib/domain/models/playlist';
+import { SHUFFLE_MODES } from '@/lib/domain/models/shuffle';
 import { byArtist, enrich, makeFeatures, makeTrack, seededRandom } from '@/test/factories';
 import {
   applyShuffle,

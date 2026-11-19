@@ -5,7 +5,7 @@ import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { playlistsApi } from '@/lib/api/client';
-import type { EnrichedTrack } from '@/lib/domain/playlist';
+import type { EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
   ARTIST_GAP_LIMITS,
   DEFAULT_ENERGY_PROFILE,
@@ -15,8 +15,8 @@ import {
   type MoodQuadrant,
   type ShuffleMode,
   type ShuffleOptions,
-} from '@/lib/domain/shuffle';
-import { applyShuffle } from '@/lib/engines/shuffle';
+} from '@/lib/domain/models/shuffle';
+import { applyShuffle } from '@/lib/domain/engines/shuffle';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { ENERGY_PROFILE_OPTIONS, MOOD_OPTIONS, SHUFFLE_MODE_DETAILS } from './labels';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';

@@ -2,7 +2,7 @@ import { getIronSession, type IronSession, type SessionOptions } from 'iron-sess
 import { cookies } from 'next/headers';
 import { getEnv } from '@/lib/config/env';
 import { HttpError } from '@/lib/http/errors';
-import type { TokenResponse } from '@/lib/spotify/oauth';
+import type { TokenResponse } from '@/lib/clients/spotify/oauth';
 
 const SESSION_COOKIE_NAME = 'sp_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;

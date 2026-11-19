@@ -1,4 +1,4 @@
-import { findDeezerPreview, getRelatedArtistTopTracks, getTrackDetailsByIsrc, peekTrackDetails } from '@/lib/deezer/client';
+import { findDeezerPreview, getRelatedArtistTopTracks, getTrackDetailsByIsrc, peekTrackDetails } from '@/lib/clients/deezer/client';
 import {
   canEditPlaylist,
   toPlaylistLink,
@@ -9,13 +9,13 @@ import {
   type PlaylistSummary,
   type Track,
   type TrackDetails,
-} from '@/lib/domain/playlist';
-import { rankArtistsByTrackCount } from '@/lib/engines/artists';
-import { selectNewCandidates } from '@/lib/engines/discovery';
+} from '@/lib/domain/models/playlist';
+import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
+import { selectNewCandidates } from '@/lib/domain/engines/discovery';
 import { HttpError } from '@/lib/http/errors';
-import { findItunesPreview } from '@/lib/itunes/client';
-import { getAudioFeatures } from '@/lib/reccobeats/client';
-import type { SpotifyClient } from '@/lib/spotify/client';
+import { findItunesPreview } from '@/lib/clients/itunes/client';
+import { getAudioFeatures } from '@/lib/clients/reccobeats/client';
+import type { SpotifyClient } from '@/lib/clients/spotify/client';
 import { isDefined, uniqueBy } from '@/lib/utils/array';
 import { TtlCache } from '@/lib/utils/ttl-cache';
 

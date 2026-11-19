@@ -3,7 +3,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { CoverImage } from '@/components/ui/cover-image';
 import { tracksApi } from '@/lib/api/client';
-import type { EnrichedTrack } from '@/lib/domain/playlist';
+import type { EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
   formatAddedDate,
   formatCompactNumber,

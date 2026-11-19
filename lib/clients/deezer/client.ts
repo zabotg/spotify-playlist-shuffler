@@ -1,4 +1,4 @@
-import type { TrackDetails } from '@/lib/domain/playlist';
+import type { TrackDetails } from '@/lib/domain/models/playlist';
 import { uniqueBy } from '@/lib/utils/array';
 import { createRateLimiter, sleep } from '@/lib/utils/async';
 import { TtlCache } from '@/lib/utils/ttl-cache';

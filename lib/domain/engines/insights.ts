@@ -2,8 +2,8 @@ import {
   AUDIO_FEATURE_KEYS,
   type AudioFeatureKey,
   type PlaylistInsights,
-} from '@/lib/domain/insights';
-import type { AudioFeatures, EnrichedTrack } from '@/lib/domain/playlist';
+} from '@/lib/domain/models/insights';
+import type { AudioFeatures, EnrichedTrack } from '@/lib/domain/models/playlist';
 import { average, countBy, isDefined, sum, topEntries } from '@/lib/utils/array';
 import { rankArtistsByTrackCount } from './artists';
 import { classifyMoodQuadrant, deriveMoodLabel } from './mood';

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canEditPlaylist } from '@/lib/domain/playlist';
+import { canEditPlaylist } from '@/lib/domain/models/playlist';
 import { withErrorHandling, type PlaylistRouteContext } from '@/lib/http/route-handler';
 import { getSpotifyContext } from '@/lib/services/spotify-context';
 

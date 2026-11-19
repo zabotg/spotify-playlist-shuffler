@@ -5,7 +5,7 @@ import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CoverImage } from '@/components/ui/cover-image';
 import { playlistsApi } from '@/lib/api/client';
-import type { Track } from '@/lib/domain/playlist';
+import type { Track } from '@/lib/domain/models/playlist';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { pluralize } from '@/lib/utils/format';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';

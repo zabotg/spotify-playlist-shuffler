@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth/session';
 import { getEnv } from '@/lib/config/env';
 import { getRequestOrigin } from '@/lib/http/request-origin';
 import { withErrorHandling } from '@/lib/http/route-handler';
-import { buildAuthorizeUrl } from '@/lib/spotify/oauth';
+import { buildAuthorizeUrl } from '@/lib/clients/spotify/oauth';
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
   // The session cookie is bound to the host it was set on, so the login must start on the

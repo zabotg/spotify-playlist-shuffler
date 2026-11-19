@@ -1,12 +1,12 @@
 import type { ChipOption } from '@/components/ui/chip';
-import type { AudioFeatureKey } from '@/lib/domain/insights';
+import type { AudioFeatureKey } from '@/lib/domain/models/insights';
 import {
   ENERGY_PROFILES,
   MOOD_QUADRANTS,
   type EnergyProfile,
   type MoodQuadrant,
   type ShuffleMode,
-} from '@/lib/domain/shuffle';
+} from '@/lib/domain/models/shuffle';
 
 export const SHUFFLE_MODE_DETAILS: Record<ShuffleMode, { label: string; description: string }> = {
   pure_random: { label: 'Pure random', description: 'Completely random order.' },

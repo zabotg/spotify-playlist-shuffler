@@ -1,5 +1,5 @@
 import type { ApiErrorBody } from '@/lib/http/errors';
-import type { EnrichedPlaylistTracks, PlaylistLink, PlaylistSummary, Track, TrackDetails } from '@/lib/domain/playlist';
+import type { EnrichedPlaylistTracks, PlaylistLink, PlaylistSummary, Track, TrackDetails } from '@/lib/domain/models/playlist';
 
 const UNAUTHORIZED = 401;
 

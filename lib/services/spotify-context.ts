@@ -1,5 +1,5 @@
 import { requireSession, type AuthenticatedSession } from '@/lib/auth/session';
-import { SpotifyClient } from '@/lib/spotify/client';
+import { SpotifyClient } from '@/lib/clients/spotify/client';
 
 export interface SpotifyContext {
   session: AuthenticatedSession;

@@ -1,4 +1,4 @@
-import { primaryArtistId, type Artist, type Track } from '@/lib/domain/playlist';
+import { primaryArtistId, type Artist, type Track } from '@/lib/domain/models/playlist';
 import { countBy, topEntries } from '@/lib/utils/array';
 
 export interface RankedArtist extends Artist {

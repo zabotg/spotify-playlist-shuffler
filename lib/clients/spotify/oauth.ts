@@ -1,5 +1,5 @@
 import { getEnv } from '@/lib/config/env';
-import { SpotifyApiError } from '@/lib/spotify/errors';
+import { SpotifyApiError } from '@/lib/clients/spotify/errors';
 
 const SPOTIFY_AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';

@@ -3,10 +3,10 @@
 import { useEffect, useMemo } from 'react';
 import { HorizontalBarChart, RatioBar, StatCard } from '@/components/ui/charts';
 import { artistsApi } from '@/lib/api/client';
-import { AUDIO_FEATURE_KEYS, type PlaylistInsights } from '@/lib/domain/insights';
-import type { EnrichedTrack } from '@/lib/domain/playlist';
-import { rankArtistsByTrackCount } from '@/lib/engines/artists';
-import { computeInsights } from '@/lib/engines/insights';
+import { AUDIO_FEATURE_KEYS, type PlaylistInsights } from '@/lib/domain/models/insights';
+import type { EnrichedTrack } from '@/lib/domain/models/playlist';
+import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
+import { computeInsights } from '@/lib/domain/engines/insights';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { formatDuration, formatPercent } from '@/lib/utils/format';
 import { AUDIO_FEATURE_DISPLAY } from './labels';

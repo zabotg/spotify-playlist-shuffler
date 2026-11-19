@@ -1,10 +1,10 @@
 import pLimit from 'p-limit';
 import { applyTokens, isTokenExpired, type AuthenticatedSession } from '@/lib/auth/session';
-import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
-import { SpotifyApiError } from '@/lib/spotify/errors';
-import { toPlaylistSummary, toPlaylistTracks, toTrack, toUser } from '@/lib/spotify/mappers';
-import { refreshAccessToken } from '@/lib/spotify/oauth';
-import type { RawArtist, RawPage, RawPlaylist, RawPlaylistEntry, RawTrack, RawUser } from '@/lib/spotify/types';
+import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/models/playlist';
+import { SpotifyApiError } from '@/lib/clients/spotify/errors';
+import { toPlaylistSummary, toPlaylistTracks, toTrack, toUser } from '@/lib/clients/spotify/mappers';
+import { refreshAccessToken } from '@/lib/clients/spotify/oauth';
+import type { RawArtist, RawPage, RawPlaylist, RawPlaylistEntry, RawTrack, RawUser } from '@/lib/clients/spotify/types';
 import { chunk, isDefined, range } from '@/lib/utils/array';
 import { sleep } from '@/lib/utils/async';
 

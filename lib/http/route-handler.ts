@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ZodError, type ZodType } from 'zod';
-import { SpotifyApiError } from '@/lib/spotify/errors';
+import { SpotifyApiError } from '@/lib/clients/spotify/errors';
 import { HttpError, type ApiErrorBody, type ErrorCode } from './errors';
 
 export interface PlaylistRouteContext {

@@ -1,5 +1,5 @@
-import type { MoodLabel } from '@/lib/domain/insights';
-import type { MoodQuadrant } from '@/lib/domain/shuffle';
+import type { MoodLabel } from '@/lib/domain/models/insights';
+import type { MoodQuadrant } from '@/lib/domain/models/shuffle';
 
 const NEUTRAL = 0.5;
 

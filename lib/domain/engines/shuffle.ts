@@ -1,4 +1,4 @@
-import { primaryArtistId, type EnrichedTrack } from '@/lib/domain/playlist';
+import { primaryArtistId, type EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
   ARTIST_GAP_LIMITS,
   DEFAULT_ENERGY_PROFILE,
@@ -7,7 +7,7 @@ import {
   type MoodQuadrant,
   type ShuffleMode,
   type ShuffleOptions,
-} from '@/lib/domain/shuffle';
+} from '@/lib/domain/models/shuffle';
 import { groupBy, partition } from '@/lib/utils/array';
 import { randomIndex, shuffleArray, type RandomSource } from '@/lib/utils/random';
 import { classifyMoodQuadrant } from './mood';

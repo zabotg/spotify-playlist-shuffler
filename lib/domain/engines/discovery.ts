@@ -1,4 +1,4 @@
-import { primaryArtistId, type Track } from '@/lib/domain/playlist';
+import { primaryArtistId, type Track } from '@/lib/domain/models/playlist';
 import { uniqueBy } from '@/lib/utils/array';
 
 export interface CandidateSelection {

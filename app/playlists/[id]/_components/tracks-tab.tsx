@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { EnrichedTrack } from '@/lib/domain/playlist';
+import type { EnrichedTrack } from '@/lib/domain/models/playlist';
 import { DEFAULT_SORT, sortTracks, TrackTable, type SortState } from './track-table';
 
 function matchesSearch(item: EnrichedTrack, query: string): boolean {
