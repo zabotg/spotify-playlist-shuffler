@@ -10,9 +10,15 @@ import { afterEach, vi } from 'vitest';
 afterEach(cleanup);
 
 // next/image needs the Next.js image loader; a plain <img> is enough to test behavior.
+type NextImageProps = ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean; priority?: boolean };
+
 vi.mock('next/image', () => ({
-  default: ({ fill: _fill, priority: _priority, ...props }: ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean; priority?: boolean }) =>
-    createElement('img', props),
+  default: (props: NextImageProps) => {
+    const imgProps = { ...props };
+    delete imgProps.fill;
+    delete imgProps.priority;
+    return createElement('img', imgProps);
+  },
 }));
 
 // jsdom has no media playback; previews just need play/pause to exist.
