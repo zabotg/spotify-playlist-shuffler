@@ -2,23 +2,36 @@
 
 @theme {
   --color-spotify: #1db954;
+  --color-spotify-bright: #1ed760;
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bricolage), var(--font-geist-sans);
+}
+
+html {
+  color-scheme: dark;
+  /* Keeps the page from shifting sideways when a tab change adds or removes the scrollbar. */
+  scrollbar-gutter: stable;
 }
 
 body {
-  @apply bg-black text-white;
+  @apply bg-zinc-950 text-zinc-100;
 }
 
 /* Clickable things look clickable, and keyboard focus is always visible. */
 button:not(:disabled),
 [role='tab'],
 summary,
-label:has(input[type='checkbox']) {
+label:has(input[type='checkbox']),
+input[type='range'] {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 :where(button, a, input, select, summary, [tabindex]):focus-visible {

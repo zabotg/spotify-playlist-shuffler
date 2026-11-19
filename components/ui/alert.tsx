@@ -1,10 +1,12 @@
+import { CircleAlert, CircleCheck, ExternalLink, Info, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-type AlertTone = 'error' | 'success';
+type AlertTone = 'error' | 'success' | 'info';
 
-const TONE_CLASSES: Record<AlertTone, string> = {
-  error: 'border-red-700 bg-red-900/40 text-red-300',
-  success: 'border-green-700 bg-green-900/40 text-green-300',
+const TONES: Record<AlertTone, { classes: string; icon: LucideIcon }> = {
+  error: { classes: 'border-red-900/80 bg-red-950/50 text-red-200', icon: CircleAlert },
+  success: { classes: 'border-green-900/80 bg-green-950/50 text-green-200', icon: CircleCheck },
+  info: { classes: 'border-zinc-800 bg-zinc-900/60 text-zinc-300', icon: Info },
 };
 
 interface AlertProps {
@@ -13,9 +15,14 @@ interface AlertProps {
 }
 
 export function Alert({ tone, children }: AlertProps) {
+  const { classes, icon: Icon } = TONES[tone];
   return (
-    <div role={tone === 'error' ? 'alert' : 'status'} className={`rounded-lg border px-4 py-3 text-sm ${TONE_CLASSES[tone]}`}>
-      {children}
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm leading-relaxed ${classes}`}
+    >
+      <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -28,8 +35,15 @@ export function SpotifyLinkAlert({ message, url }: { message: string; url: strin
   return (
     <Alert tone="success">
       {message}{' '}
-      <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 font-semibold text-green-100 underline underline-offset-2 hover:text-white"
+      >
         Open in Spotify
+        <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+        <span className="sr-only">(opens in a new tab)</span>
       </a>
     </Alert>
   );
