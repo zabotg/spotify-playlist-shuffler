@@ -4,18 +4,18 @@ Spread an artist’s tracks across a playlist, smooth out jumps in tempo, or
 build toward a high-energy finish. Preview the order, then save it as a new
 Spotify playlist or apply it to the original.
 
-[Setup](#setup) · [Shuffle modes](#shuffle-modes) · [Troubleshooting](#troubleshooting)
+[Setup](#setup) · [Shuffle modes](#shuffle-modes) · [Troubleshooting](#troubleshooting) · [Development](#development)
 
 ## Shuffle modes
 
-| Mode | How it works |
-| --- | --- |
-| Pure random | Shuffles all tracks at random. |
-| Artist-balanced | Distributes each artist’s tracks more evenly across the playlist. |
-| Artist spacing | Leaves room between songs by the same artist. |
-| Smooth BPM transitions | Keeps tempo changes gradual from one track to the next. |
-| Energy curves | Arranges tracks along an energy curve, such as a gradual build. |
-| Mood sequences | Orders tracks by mood to create a progression. |
+| Mode                   | How it works                                                      |
+| ---------------------- | ----------------------------------------------------------------- |
+| Pure random            | Shuffles all tracks at random.                                    |
+| Artist-balanced        | Distributes each artist’s tracks more evenly across the playlist. |
+| Artist spacing         | Leaves room between songs by the same artist.                     |
+| Smooth BPM transitions | Keeps tempo changes gradual from one track to the next.           |
+| Energy curves          | Arranges tracks along an energy curve, such as a gradual build.   |
+| Mood sequences         | Orders tracks by mood to create a progression.                    |
 
 Shuffle runs in your browser. You can sort the result before saving.
 The app blocks overwrites for playlists with local files or podcast episodes
@@ -93,11 +93,84 @@ Keep your `.env` private and never commit it.
 
 ## Data sources
 
-Spotify supplies your playlists. [ReccoBeats](https://reccobeats.com), [Deezer](https://developers.deezer.com/api) and [iTunes](https://performance-partners.apple.com/search-api) fill in audio details, previews and suggestions, with no extra accounts or API keys.
+| Data                                             | Source                                                                        |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Playlists, tracks, who added them, artist genres | [Spotify Web API](https://developer.spotify.com/documentation/web-api)        |
+| Tempo, key, energy, danceability, mood, loudness | [ReccoBeats](https://reccobeats.com)                                          |
+| BPM fallback and popularity                      | [Deezer API](https://developers.deezer.com/api)                               |
+| 30-second previews                               | Deezer, or [iTunes Search](https://performance-partners.apple.com/search-api) |
+| Related artists for Discover                     | Deezer                                                                        |
+
+None of them need an extra account or API key.
 
 ## Privacy
 
 Everything runs on your machine. Your Spotify login stays in an encrypted cookie in your browser, and nothing is saved to a database.
+
+## Development
+
+### Tech stack
+
+- [Next.js 16](https://nextjs.org) (App Router), React 19 and TypeScript
+- Tailwind CSS 4
+- [iron-session](https://github.com/vvo/iron-session) for the session cookie
+- [zod](https://zod.dev) for input validation
+- [Vitest](https://vitest.dev) for tests
+
+### Scripts
+
+| Command                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| `npm run dev`           | Start the development server           |
+| `npm run build`         | Create a production build              |
+| `npm run start`         | Serve the production build             |
+| `npm run lint`          | Run ESLint                             |
+| `npm run typecheck`     | Run the TypeScript compiler            |
+| `npm run test`          | Run the unit tests                     |
+| `npm run test:coverage` | Run the tests with a coverage report   |
+| `npm run check`         | Lint, typecheck and test with coverage |
+
+Tests don't call real APIs and don't read your `.env`.
+
+### Project structure
+
+```text
+app/
+  api/                    Route handlers
+  dashboard/              Playlist grid
+  playlists/[id]/         Playlist page and its tabs (tracks, shuffle, insights, discover)
+components/ui/            Shared UI components
+lib/
+  domain/models/          Types and small helpers
+  domain/engines/         Shuffle, insights, discovery and mood algorithms
+  services/               Playlists, track data, users and discovery
+  clients/                Spotify, ReccoBeats, Deezer and iTunes clients
+  http/                   Route helpers, errors and security headers
+  auth/                   Session, PKCE and token refresh
+  config/                 Environment and app settings
+  validation/             Input schemas
+  api/                    Browser client for the app's API
+  hooks/                  React hooks
+  utils/                  Generic helpers
+proxy.ts                  Auth and request checks for every route
+```
+
+### API
+
+All routes need a signed-in session.
+
+| Method | Route                                | Description                                    |
+| ------ | ------------------------------------ | ---------------------------------------------- |
+| GET    | `/api/playlists`                     | Playlists you own or collaborate on            |
+| POST   | `/api/playlists`                     | Create a playlist with tracks                  |
+| GET    | `/api/playlists/:id`                 | Playlist details                               |
+| GET    | `/api/playlists/:id/tracks`          | Tracks in their original order with audio data |
+| PUT    | `/api/playlists/:id/tracks`          | Replace the track order                        |
+| POST   | `/api/playlists/:id/tracks`          | Add tracks                                     |
+| GET    | `/api/playlists/:id/recommendations` | Song suggestions                               |
+| POST   | `/api/tracks/details`                | BPM and popularity for up to 50 ISRCs          |
+| GET    | `/api/tracks/preview`                | Preview URL for one track                      |
+| GET    | `/api/artists/genres`                | Genres for up to 20 artists                    |
 
 ## License
 
