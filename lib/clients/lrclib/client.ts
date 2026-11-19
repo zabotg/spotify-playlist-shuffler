@@ -51,7 +51,8 @@ export async function getLyrics({ title, artistName, albumName, durationMs }: Ly
     );
     return { status: 'ok', data: toLyrics(raw) };
   } catch (error) {
-    if (!(error instanceof UpstreamError && error.status === 404)) return { status: 'failed' };
+    // 4xx: no exact match (or a query LRCLIB didn't like), so try a search. Anything else is temporary.
+    if (!(error instanceof UpstreamError && error.status >= 400 && error.status < 500)) return { status: 'failed' };
   }
 
   try {

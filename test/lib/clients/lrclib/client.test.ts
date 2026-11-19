@@ -34,7 +34,7 @@ describe('LRCLIB client', () => {
   });
 
   it('reports not found and temporary failures', async () => {
-    mockFetch(new Response('', { status: 404 }), jsonResponse([{ plainLyrics: 'no duration' }]));
+    mockFetch(new Response('', { status: 400 }), jsonResponse([{ plainLyrics: 'no duration' }]));
     expect(await getLyrics(query)).toEqual({ status: 'not_found' });
 
     mockFetch(new Response('', { status: 404 }), new Response('', { status: 500 }), new Response('', { status: 500 }));
