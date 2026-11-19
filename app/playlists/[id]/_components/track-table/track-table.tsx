@@ -13,6 +13,7 @@ import {
   type TableView,
 } from './columns';
 import { PreviewButton } from './preview-button';
+import { TrackDetailsPanel } from './track-details-panel';
 import { nextSortState, sortBy, type SortState } from './sorting';
 
 export type SortKey = 'position' | ColumnKey;
@@ -105,6 +106,7 @@ interface TrackRowProps {
   /** `undefined` when the table has no selection column. */
   isSelected?: boolean;
   onToggleSelected?: (uri: string) => void;
+  onOpenDetails: (item: EnrichedTrack) => void;
 }
 
 /** Memoized so playing a preview or loading details only re-renders the rows that changed. */
@@ -116,6 +118,7 @@ const TrackRow = memo(function TrackRow({
   onTogglePreview,
   isSelected,
   onToggleSelected,
+  onOpenDetails,
 }: TrackRowProps) {
   const withSelect = onToggleSelected !== undefined;
   return (
@@ -144,7 +147,18 @@ const TrackRow = memo(function TrackRow({
             index === 0 ? `${STICKY.title(withSelect)} ${STICKY_BG}` : 'group-hover:bg-zinc-900/60'
           }`}
         >
-          {column.render(item)}
+          {index === 0 ? (
+            <button
+              type="button"
+              title="Show details, credits and lyrics"
+              onClick={() => onOpenDetails(item)}
+              className="block w-full rounded text-left hover:underline"
+            >
+              {column.render(item)}
+            </button>
+          ) : (
+            column.render(item)
+          )}
         </td>
       ))}
     </tr>
@@ -166,6 +180,8 @@ export function TrackTable({ tracks, sort, onSortChange, selection, initialView 
   const columns = useMemo(() => visibleColumns(tracks, view), [tracks, view]);
   const { ref: scrollRef, hasMoreRight, onScroll } = useHorizontalOverflow();
   const withSelect = selection !== undefined;
+  const [detailsItem, setDetailsItem] = useState<EnrichedTrack | null>(null);
+  const closeDetails = useCallback(() => setDetailsItem(null), []);
 
   return (
     <div className="flex flex-col gap-3">
@@ -237,6 +253,7 @@ export function TrackTable({ tracks, sort, onSortChange, selection, initialView 
                   onTogglePreview={toggle}
                   isSelected={selection?.selected.has(item.track.uri)}
                   onToggleSelected={selection?.onToggle}
+                  onOpenDetails={setDetailsItem}
                 />
               ))}
             </tbody>
@@ -250,6 +267,7 @@ export function TrackTable({ tracks, sort, onSortChange, selection, initialView 
         )}
       </div>
       <audio ref={audioRef} onEnded={onEnded} />
+      {detailsItem && <TrackDetailsPanel item={detailsItem} onClose={closeDetails} />}
     </div>
   );
 }
