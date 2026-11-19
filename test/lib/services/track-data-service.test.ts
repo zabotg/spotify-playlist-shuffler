@@ -6,7 +6,7 @@ const deezer = vi.hoisted(() => ({
   searchTrack: vi.fn(),
   toTrackDetails: (track: { bpm?: number; rank?: number }) => ({ bpm: track.bpm ?? null, popularity: track.rank ?? null }),
 }));
-const itunes = vi.hoisted(() => ({ findPreview: vi.fn(), normalizeForMatch: (text: string) => text.toLowerCase() }));
+const itunes = vi.hoisted(() => ({ findPreview: vi.fn() }));
 const reccobeats = vi.hoisted(() => ({ getAudioFeaturesBatch: vi.fn(), RECCOBEATS_MAX_IDS_PER_REQUEST: 2 }));
 vi.mock('@/lib/clients/deezer/client', () => deezer);
 vi.mock('@/lib/clients/itunes/client', () => itunes);

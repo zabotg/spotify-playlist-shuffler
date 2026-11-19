@@ -1,10 +1,11 @@
 import pLimit from 'p-limit';
 import * as deezer from '@/lib/clients/deezer/client';
-import { findPreview as findItunesPreview, normalizeForMatch } from '@/lib/clients/itunes/client';
+import { findPreview as findItunesPreview } from '@/lib/clients/itunes/client';
 import { getAudioFeaturesBatch, RECCOBEATS_MAX_IDS_PER_REQUEST } from '@/lib/clients/reccobeats/client';
 import { isAllowedPreviewUrl } from '@/lib/config/media-hosts';
 import type { AudioFeatures, TrackDetails } from '@/lib/domain/models/playlist';
 import { chunk } from '@/lib/utils/array';
+import { normalizeForMatch } from '@/lib/utils/text';
 import { TtlCache } from '@/lib/utils/ttl-cache';
 
 /**

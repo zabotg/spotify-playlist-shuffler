@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { jsonResponse, mockFetch } from '@/test/fakes';
-import { findPreview, normalizeForMatch } from '@/lib/clients/itunes/client';
+import { findPreview } from '@/lib/clients/itunes/client';
+import { normalizeForMatch } from '@/lib/utils/text';
 
 const song = (trackName: string, artistName: string, previewUrl?: string) => ({ trackName, artistName, previewUrl });
 

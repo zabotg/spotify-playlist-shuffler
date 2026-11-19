@@ -1,4 +1,5 @@
 import { fetchJsonOrNull } from '@/lib/clients/http/fetch-json';
+import { normalizeForMatch } from '@/lib/utils/text';
 
 /**
  * Public iTunes Search API (no key needed), used as a fallback source of 30 second previews.
@@ -12,16 +13,6 @@ interface RawItunesSong {
   trackName?: string;
   artistName?: string;
   previewUrl?: string;
-}
-
-/** Lowercase, no accents, no "(feat. ...)" / "- Remastered" suffixes, letters and digits only. */
-export function normalizeForMatch(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\(.*?\)|\[.*?\]|\s-\s.*$/g, '')
-    .replace(/[^a-z0-9]/g, '');
 }
 
 function looselyEqual(a: string, b: string): boolean {
