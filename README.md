@@ -119,18 +119,19 @@ Everything runs on your machine. Your Spotify login stays in an encrypted cookie
 
 ### Scripts
 
-| Command                 | Description                            |
-| ----------------------- | -------------------------------------- |
-| `npm run dev`           | Start the development server           |
-| `npm run build`         | Create a production build              |
-| `npm run start`         | Serve the production build             |
-| `npm run lint`          | Run ESLint                             |
-| `npm run typecheck`     | Run the TypeScript compiler            |
-| `npm run test`          | Run the unit tests                     |
-| `npm run test:coverage` | Run the tests with a coverage report   |
-| `npm run check`         | Lint, typecheck and test with coverage |
+| Command                 | Description                                        |
+| ----------------------- | -------------------------------------------------- |
+| `npm run dev`           | Start the development server                       |
+| `npm run build`         | Create a production build                          |
+| `npm run start`         | Serve the production build                         |
+| `npm run lint`          | Run ESLint                                         |
+| `npm run typecheck`     | Run the TypeScript compiler                        |
+| `npm run test`          | Run the unit tests                                 |
+| `npm run test:coverage` | Run the tests with a coverage report               |
+| `npm run check`         | Lint, typecheck and test with coverage             |
+| `npm run test:e2e`      | Smoke tests against a running app (start it first) |
 
-Tests don't call real APIs and don't read your `.env`.
+Unit and component tests don't call real APIs and don't read your `.env`. The smoke tests in `test/e2e` call a running app over HTTP and only use routes that work without signing in.
 
 ### Project structure
 
