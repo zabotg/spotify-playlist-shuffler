@@ -16,15 +16,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      // Server code, domain logic, API clients, controllers and pure UI logic.
-      // React components are covered by the build and manual testing.
-      include: [
-        'lib/**/*.ts',
-        'app/api/**/*.ts',
-        'proxy.ts',
-        'app/**/_components/**/*.ts',
-      ],
-      exclude: ['**/*.test.ts', 'lib/hooks/**', 'lib/clients/spotify/types.ts', 'lib/domain/models/insights.ts', 'lib/domain/models/metadata.ts'],
+      // Everything that ships: server code, domain logic, API clients, controllers, the proxy and the UI.
+      include: ['lib/**/*.ts', 'app/**/*.{ts,tsx}', 'components/**/*.tsx', 'proxy.ts'],
+      // Type-only files have no code to run.
+      exclude: ['lib/clients/spotify/types.ts', 'lib/domain/models/insights.ts', 'lib/domain/models/metadata.ts'],
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
     },
   },
