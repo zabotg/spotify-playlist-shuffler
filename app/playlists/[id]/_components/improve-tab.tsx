@@ -5,11 +5,11 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { playlistsApi } from '@/lib/api/playlists-api';
-import { toCamelot, formatCamelot } from '@/lib/domain/engines/camelot';
+import { formatCamelot, toCamelot, type CamelotKey } from '@/lib/domain/engines/camelot';
 import { findDuplicates, findOutliers, type Outlier } from '@/lib/domain/engines/cleanup';
 import { analyzeFlow, roughestTransitions, type FlowIssue, type Transition } from '@/lib/domain/engines/flow';
 import { splitByMood } from '@/lib/domain/engines/split';
-import type { EnrichedTrack } from '@/lib/domain/models/playlist';
+import type { AudioFeatures, EnrichedTrack } from '@/lib/domain/models/playlist';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { pluralize } from '@/lib/utils/format';
 import { MOOD_LABELS } from './labels';
@@ -50,15 +50,15 @@ function TrackLabel({ item, position }: { item: EnrichedTrack; position: number 
   );
 }
 
+/** Issues are only reported when both tracks have the data being compared. */
 function describeIssue(issue: FlowIssue, from: EnrichedTrack, to: EnrichedTrack): string {
-  if (issue === 'tempo') return `Tempo ${Math.round(from.bpm ?? 0)} → ${Math.round(to.bpm ?? 0)} BPM`;
-  if (issue === 'energy') {
-    const change = (to.features?.energy ?? 0) - (from.features?.energy ?? 0);
-    return change > 0 ? 'Energy jumps up' : 'Energy drops';
-  }
-  const fromKey = from.features && toCamelot(from.features.key, from.features.mode);
-  const toKey = to.features && toCamelot(to.features.key, to.features.mode);
-  return fromKey && toKey ? `Key clash ${formatCamelot(fromKey)} → ${formatCamelot(toKey)}` : 'Key clash';
+  if (issue === 'tempo') return `Tempo ${Math.round(from.bpm as number)} → ${Math.round(to.bpm as number)} BPM`;
+  const fromFeatures = from.features as AudioFeatures;
+  const toFeatures = to.features as AudioFeatures;
+  if (issue === 'energy') return toFeatures.energy > fromFeatures.energy ? 'Energy jumps up' : 'Energy drops';
+  const fromKey = toCamelot(fromFeatures.key, fromFeatures.mode) as CamelotKey;
+  const toKey = toCamelot(toFeatures.key, toFeatures.mode) as CamelotKey;
+  return `Key clash ${formatCamelot(fromKey)} → ${formatCamelot(toKey)}`;
 }
 
 interface EditProps {
@@ -147,7 +147,8 @@ function BridgeFinder({ transition, tracks, playlistId, canEdit, onChanged }: Ed
 function FlowCard({ tracks, ...edit }: EditProps & { tracks: EnrichedTrack[] }) {
   const analysis = useMemo(() => analyzeFlow(tracks), [tracks]);
   const rough = useMemo(() => roughestTransitions(analysis, ROUGH_TRANSITION_LIMIT), [analysis]);
-  const label = analysis.score === null ? null : FLOW_LABELS.find(({ min }) => (analysis.score as number) >= min)?.label;
+  // The last label starts at 0, so every score has one.
+  const label = analysis.score === null ? null : FLOW_LABELS.find(({ min }) => (analysis.score as number) >= min)!.label;
 
   return (
     <Card

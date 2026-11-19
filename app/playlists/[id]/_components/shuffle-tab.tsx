@@ -123,46 +123,43 @@ function ModeSettings({ settings, onChange }: ModeSettingsProps) {
     );
   }
 
-  if (settings.mode === 'mood_based') {
-    return (
-      <div className="flex flex-col gap-2.5">
-        <div className="flex flex-col gap-0.5">
-          <span className={SETTING_LABEL_CLASSES}>Mood order</span>
-          <span className="text-sm text-zinc-400">Select moods in the order they should play</span>
-        </div>
-        <div role="group" aria-label="Mood order" className="flex flex-wrap gap-2">
-          {MOOD_OPTIONS.map(({ value, label }) => {
-            const position = settings.moodSequence.indexOf(value);
-            const isSelected = position >= 0;
-            return (
-              <Chip
-                key={value}
-                selected={isSelected}
-                onClick={() => onChange({ moodSequence: toggleMood(settings.moodSequence, value) })}
-              >
-                <span
-                  aria-hidden={!isSelected}
-                  className={`-ml-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs tabular-nums ${
-                    isSelected ? 'bg-zinc-950/20' : 'border border-dashed border-zinc-600'
-                  }`}
-                >
-                  {isSelected && (
-                    <>
-                      {position + 1}
-                      <span className="sr-only">.</span>
-                    </>
-                  )}
-                </span>
-                {label}
-              </Chip>
-            );
-          })}
-        </div>
+  // Only modes with settings get here; the last one is the mood order.
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-0.5">
+        <span className={SETTING_LABEL_CLASSES}>Mood order</span>
+        <span className="text-sm text-zinc-400">Select moods in the order they should play</span>
       </div>
-    );
-  }
-
-  return null;
+      <div role="group" aria-label="Mood order" className="flex flex-wrap gap-2">
+        {MOOD_OPTIONS.map(({ value, label }) => {
+          const position = settings.moodSequence.indexOf(value);
+          const isSelected = position >= 0;
+          return (
+            <Chip
+              key={value}
+              selected={isSelected}
+              onClick={() => onChange({ moodSequence: toggleMood(settings.moodSequence, value) })}
+            >
+              <span
+                aria-hidden={!isSelected}
+                className={`-ml-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs tabular-nums ${
+                  isSelected ? 'bg-zinc-950/20' : 'border border-dashed border-zinc-600'
+                }`}
+              >
+                {isSelected && (
+                  <>
+                    {position + 1}
+                    <span className="sr-only">.</span>
+                  </>
+                )}
+              </span>
+              {label}
+            </Chip>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function unavailableReason(mode: ShuffleMode, tracks: readonly EnrichedTrack[]): string | null {
@@ -174,12 +171,12 @@ function unavailableReason(mode: ShuffleMode, tracks: readonly EnrichedTrack[]):
 }
 
 /** Explains a disabled preview button. Display only; `canPreview` decides. */
-function previewBlockedReason(settings: ShuffleSettings, tracks: readonly EnrichedTrack[]): string | null {
+function previewBlockedReason(settings: ShuffleSettings, tracks: readonly EnrichedTrack[]): string {
   if (tracks.length === 0) return 'This playlist has no tracks';
   const reason = unavailableReason(settings.mode, tracks);
   if (reason) return reason;
-  if (settings.mode === 'mood_based' && settings.moodSequence.length === 0) return 'Pick at least one mood';
-  return null;
+  // Only called when the preview is blocked, so the last possible cause is an empty mood list.
+  return 'Pick at least one mood';
 }
 
 interface ModeCardProps {

@@ -33,7 +33,7 @@ export function useBatchedLoader<Item, Value>(
       setProgress({ loaded: 0, total: items.length, isLoading: true });
       let loaded = 0;
       for (const batch of chunk(items, batchSize)) {
-        if (cancelled) return;
+        // Cancellation can only happen while waiting, so it's checked right after each request.
         try {
           const batchResults = await load(batch);
           if (cancelled) return;
