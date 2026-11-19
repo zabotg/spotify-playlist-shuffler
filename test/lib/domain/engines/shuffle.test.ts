@@ -7,6 +7,7 @@ import {
   artistAwareShuffle,
   balancedShuffle,
   bpmSmoothShuffle,
+  djMixShuffle,
   energyCurveShuffle,
   moodShuffle,
   shuffleAgain,
@@ -178,5 +179,19 @@ describe('shuffleAgain', () => {
 
   it('uses Math.random by default', () => {
     expect(ids(shuffleAgain(tracks, { mode: 'balanced' }, null))).toEqual(ids(tracks));
+  });
+});
+
+describe('djMixShuffle', () => {
+  it('chains tracks with compatible keys and close tempos, and appends tracks without data', () => {
+    const at = (bpm: number, key: number, energy: number) =>
+      enrich(makeTrack({ name: `${bpm}` }), { bpm, features: makeFeatures({ key, mode: 1, energy, tempo: bpm }) });
+    const tracks = [at(128, 7, 0.8), at(100, 0, 0.2), at(120, 2, 0.6), at(110, 7, 0.4)];
+    const bare = enrich(makeTrack());
+    const result = djMixShuffle([...tracks, bare], seededRandom());
+
+    expect(result.at(-1)).toBe(bare);
+    expect(result.slice(0, 4).map((item) => item.bpm)).toEqual([100, 110, 120, 128]);
+    expect(ids(djMixShuffle([bare, enrich(makeTrack())]))).toHaveLength(2);
   });
 });

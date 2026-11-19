@@ -5,6 +5,7 @@ export const SHUFFLE_MODES = [
   'bpm_smooth',
   'energy_curve',
   'mood_based',
+  'dj_mix',
 ] as const;
 export type ShuffleMode = (typeof SHUFFLE_MODES)[number];
 
@@ -17,6 +18,7 @@ export type MoodQuadrant = (typeof MOOD_QUADRANTS)[number];
 export const MODES_REQUIRING_AUDIO_FEATURES: ReadonlySet<ShuffleMode> = new Set([
   'energy_curve',
   'mood_based',
+  'dj_mix',
 ]);
 
 export const ARTIST_GAP_LIMITS = { min: 1, max: 10, default: 3 } as const;

@@ -15,6 +15,7 @@ export const SHUFFLE_MODE_DETAILS: Record<ShuffleMode, { label: string; descript
   bpm_smooth: { label: 'Smooth BPM', description: 'Gradual tempo changes that peak in the middle.' },
   energy_curve: { label: 'Energy curve', description: 'Shapes how energy rises and falls.' },
   mood_based: { label: 'Mood sequence', description: 'Plays moods in the order you choose.' },
+  dj_mix: { label: 'DJ mix', description: 'Blends tracks with compatible keys and close tempos.' },
 };
 
 const ENERGY_PROFILE_LABELS: Record<EnergyProfile, string> = {

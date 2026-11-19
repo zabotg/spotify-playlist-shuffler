@@ -10,6 +10,7 @@ import {
 } from '@/lib/domain/models/shuffle';
 import { groupBy } from '@/lib/utils/array';
 import { randomIndex, shuffleArray, type RandomSource } from '@/lib/utils/random';
+import { scoreTransition } from './flow';
 import { classifyMoodQuadrant } from './mood';
 
 /** Random spread added before sorting, so each run differs while keeping the overall shape. */
@@ -17,6 +18,8 @@ const BPM_JITTER = 8;
 const ENERGY_JITTER = 0.08;
 /** How many times `shuffleAgain` retries before accepting an identical order. */
 const RESHUFFLE_ATTEMPTS = 5;
+/** Random bonus (0-1 scale) that lets close candidates win sometimes, so runs differ. */
+const DJ_MIX_NOISE = 0.05;
 
 type Arranger = <T>(sortedAscending: T[]) => T[];
 type Shuffler = (tracks: EnrichedTrack[], options: ShuffleOptions, random: RandomSource) => EnrichedTrack[];
@@ -132,6 +135,36 @@ export function moodShuffle(
   return [...sequenced, ...shuffleArray([...leftovers, ...withoutFeatures], random)];
 }
 
+/**
+ * DJ-style order: starts from a random low-energy track, then always picks the remaining track
+ * that blends best (compatible key, close tempo, small energy change). Small random noise keeps
+ * each run different. Tracks without audio data go at the end.
+ */
+export function djMixShuffle(tracks: EnrichedTrack[], random: RandomSource = Math.random): EnrichedTrack[] {
+  const [withFeatures, withoutFeatures] = splitByFeatures(tracks);
+  if (withFeatures.length === 0) return shuffleArray(tracks, random);
+
+  const remaining = withFeatures.map(({ item }) => item);
+  const calmest = [...withFeatures].sort((a, b) => a.features.energy - b.features.energy).map(({ item }) => item);
+  const startPool = calmest.slice(0, Math.ceil(calmest.length / 4));
+  let current = startPool[randomIndex(startPool.length, random)];
+  const result = [current];
+  remaining.splice(remaining.indexOf(current), 1);
+
+  while (remaining.length > 0) {
+    const from = current;
+    const scored = remaining.map((item) => ({
+      item,
+      // Both tracks have audio features here, so the transition always has a score.
+      score: (scoreTransition(from, item).score as number) + random() * DJ_MIX_NOISE,
+    }));
+    current = scored.reduce((best, candidate) => (candidate.score > best.score ? candidate : best)).item;
+    result.push(current);
+    remaining.splice(remaining.indexOf(current), 1);
+  }
+  return [...result, ...shuffleArray(withoutFeatures, random)];
+}
+
 const SHUFFLERS: Record<ShuffleMode, Shuffler> = {
   pure_random: (tracks, _options, random) => shuffleArray(tracks, random),
   balanced: (tracks, _options, random) => balancedShuffle(tracks, random),
@@ -139,6 +172,7 @@ const SHUFFLERS: Record<ShuffleMode, Shuffler> = {
   bpm_smooth: (tracks, _options, random) => bpmSmoothShuffle(tracks, random),
   energy_curve: (tracks, options, random) => energyCurveShuffle(tracks, options.energyProfile, random),
   mood_based: (tracks, options, random) => moodShuffle(tracks, options.moodSequence, random),
+  dj_mix: (tracks, _options, random) => djMixShuffle(tracks, random),
 };
 
 export function applyShuffle(
