@@ -153,6 +153,7 @@ lib/
   hooks/                  React hooks
   utils/                  Generic helpers
 proxy.ts                  Auth and request checks for every route
+test/                     Tests, mirroring the folders above, plus shared fixtures
 ```
 
 ### API

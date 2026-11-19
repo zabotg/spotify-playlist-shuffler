@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['**/*.test.ts'],
+    include: ['test/**/*.test.ts'],
     exclude: ['node_modules', '.next'],
     setupFiles: ['./test/setup.ts'],
     restoreMocks: true,
