@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { tracksApi } from '@/lib/api/client';
+import { tracksApi } from '@/lib/api/tracks-api';
 import type { EnrichedTrack, TrackDetails } from '@/lib/domain/models/playlist';
 import { chunk, isDefined } from '@/lib/utils/array';
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
-import { playlistsApi } from '@/lib/api/client';
+import { playlistsApi } from '@/lib/api/playlists-api';
 import type { EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
   ARTIST_GAP_LIMITS,
@@ -20,7 +20,7 @@ import { applyShuffle } from '@/lib/domain/engines/shuffle';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { ENERGY_PROFILE_OPTIONS, MOOD_OPTIONS, SHUFFLE_MODE_DETAILS } from './labels';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';
-import { DEFAULT_SORT, sortTracks, TrackTable, type SortState } from './track-table';
+import { DEFAULT_SORT, sortTracks, TrackTable, type TrackSort } from './track-table/track-table';
 
 const DEFAULT_NEW_PLAYLIST_NAME = 'Shuffled Playlist';
 
@@ -123,7 +123,7 @@ interface ShuffleTabProps {
 
 export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
   const [settings, setSettings] = useState<ShuffleSettings>(INITIAL_SETTINGS);
-  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
   const [shuffled, setShuffled] = useState<EnrichedTrack[] | null>(null);
   const save = useAsyncAction((destination: SaveDestination, uris: string[]) =>
     destination.target === 'current'

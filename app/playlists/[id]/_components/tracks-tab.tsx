@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { EnrichedTrack } from '@/lib/domain/models/playlist';
-import { DEFAULT_SORT, sortTracks, TrackTable, type SortState } from './track-table';
+import { DEFAULT_SORT, sortTracks, TrackTable, type TrackSort } from './track-table/track-table';
 
 function matchesSearch(item: EnrichedTrack, query: string): boolean {
   const { track } = item;
@@ -11,7 +11,7 @@ function matchesSearch(item: EnrichedTrack, query: string): boolean {
 }
 
 export function TracksTab({ tracks }: { tracks: EnrichedTrack[] }) {
-  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
   const [search, setSearch] = useState('');
 
   const visibleTracks = useMemo(() => {

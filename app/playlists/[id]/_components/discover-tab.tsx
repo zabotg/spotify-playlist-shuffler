@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CoverImage } from '@/components/ui/cover-image';
-import { playlistsApi } from '@/lib/api/client';
+import { playlistsApi } from '@/lib/api/playlists-api';
 import type { Track } from '@/lib/domain/models/playlist';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { pluralize } from '@/lib/utils/format';

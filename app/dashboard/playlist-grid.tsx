@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import { ErrorAlert } from '@/components/ui/alert';
 import { CoverImage } from '@/components/ui/cover-image';
-import { playlistsApi } from '@/lib/api/client';
+import { playlistsApi } from '@/lib/api/playlists-api';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { pluralize } from '@/lib/utils/format';
 
