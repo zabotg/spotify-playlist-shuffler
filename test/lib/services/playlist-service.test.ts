@@ -10,6 +10,7 @@ vi.mock('@/lib/services/user-service', () => users);
 import {
   addTracks,
   createPlaylistWithTracks,
+  removeTracksAt,
   getEditablePlaylists,
   loadEnrichedTracks,
   replacePlaylistOrder,
@@ -20,6 +21,7 @@ function fakeClient(overrides: Partial<Record<keyof SpotifyClient, unknown>> = {
     getAllPlaylists: vi.fn(),
     getPlaylistTracks: vi.fn(),
     moveItems: vi.fn(),
+    removeTracks: vi.fn(),
     addTracksToPlaylist: vi.fn(),
     createPlaylist: vi.fn(),
     ...overrides,
@@ -105,11 +107,33 @@ describe('playlist service', () => {
     expect(client.moveItems).not.toHaveBeenCalled();
   });
 
+  it('adds tracks at a position', async () => {
+    const client = fakeClient();
+    await addTracks(client, 'p1', uris('a'), 3);
+    expect(client.addTracksToPlaylist).toHaveBeenCalledWith('p1', uris('a'), 3);
+  });
+
+  it('removes positions and puts back other copies of the same track', async () => {
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b', 'a')) });
+    expect((await removeTracksAt(client, 'p1', [2])).playlistId).toBe('p1');
+    expect(client.removeTracks).toHaveBeenCalledWith('p1', uris('a'));
+    expect(client.addTracksToPlaylist).toHaveBeenCalledWith('p1', uris('a'), 0);
+  });
+
+  it('refuses removals on playlists with local files or after changes', async () => {
+    const withLocal = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue({ items: [], skippedItemCount: 1 }) });
+    await expect(removeTracksAt(withLocal, 'p1', [0])).rejects.toMatchObject({ status: 409 });
+    const changed = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a')) });
+    await expect(removeTracksAt(changed, 'p1', [5])).rejects.toMatchObject({ status: 409 });
+    expect(changed.removeTracks).not.toHaveBeenCalled();
+  });
+
   it('adds tracks and creates playlists', async () => {
     const client = fakeClient({ createPlaylist: vi.fn().mockResolvedValue({ id: 'new' }) });
     expect((await addTracks(client, 'p1', ['spotify:track:a'])).playlistId).toBe('p1');
     expect((await createPlaylistWithTracks(client, 'Mix', ['spotify:track:b'])).playlistId).toBe('new');
     expect(client.createPlaylist).toHaveBeenCalledWith('Mix', 'Created with Spotify Playlist Shuffler');
     expect(client.addTracksToPlaylist).toHaveBeenLastCalledWith('new', ['spotify:track:b']);
+    expect(client.addTracksToPlaylist).toHaveBeenCalledWith('p1', ['spotify:track:a'], undefined);
   });
 });

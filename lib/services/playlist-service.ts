@@ -1,4 +1,5 @@
 import type { SpotifyClient } from '@/lib/clients/spotify/client';
+import { planRemoval } from '@/lib/domain/engines/removal';
 import { planReorder } from '@/lib/domain/engines/reorder';
 import {
   canEditPlaylist,
@@ -84,12 +85,40 @@ export async function replacePlaylistOrder(
   return toPlaylistLink(playlistId);
 }
 
+/** Adds tracks at the end, or at `position` (e.g. between two tracks). */
 export async function addTracks(
   client: SpotifyClient,
   playlistId: string,
   uris: readonly string[],
+  position?: number,
 ): Promise<PlaylistLink> {
-  await client.addTracksToPlaylist(playlistId, uris);
+  await client.addTracksToPlaylist(playlistId, uris, position);
+  return toPlaylistLink(playlistId);
+}
+
+/**
+ * Removes the tracks at the given positions. Other copies of the same tracks are put back where
+ * they were. Playlists with local files or episodes are refused, like overwriting.
+ */
+export async function removeTracksAt(
+  client: SpotifyClient,
+  playlistId: string,
+  positions: readonly number[],
+): Promise<PlaylistLink> {
+  const { items, skippedItemCount } = await client.getPlaylistTracks(playlistId);
+  if (skippedItemCount > 0) {
+    throw new HttpError(409, 'CONFLICT', 'This playlist has local files or episodes, so tracks can only be removed in Spotify.');
+  }
+  const plan = planRemoval(
+    items.map((item) => item.track.uri),
+    positions,
+  );
+  if (!plan) {
+    throw new HttpError(409, 'CONFLICT', 'The playlist changed since it was loaded. Reload the page and try again.');
+  }
+
+  await client.removeTracks(playlistId, plan.removeUris);
+  for (const { uri, position } of plan.reinsert) await client.addTracksToPlaylist(playlistId, [uri], position);
   return toPlaylistLink(playlistId);
 }
 

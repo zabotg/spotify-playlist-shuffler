@@ -109,6 +109,22 @@ describe('SpotifyClient', () => {
     expect(bodies.flat()).toEqual(uris);
   });
 
+  it('adds tracks at a position, shifting the position for each batch', async () => {
+    const uris = Array.from({ length: 150 }, (_, index) => `spotify:track:t${index}`);
+    const fetchMock = mockFetch(jsonResponse({}), jsonResponse({}));
+    await client.addTracksToPlaylist('p1', uris, 5);
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies.map((body) => body.position)).toEqual([5, 105]);
+  });
+
+  it('removes every copy of the given tracks in batches', async () => {
+    const uris = Array.from({ length: 120 }, (_, index) => `spotify:track:t${index}`);
+    const fetchMock = mockFetch(jsonResponse({}), jsonResponse({}));
+    await client.removeTracks('p1', uris);
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['DELETE', 'DELETE']);
+    expect(JSON.parse(String(initOf(fetchMock, 0)?.body)).items[0]).toEqual({ uri: 'spotify:track:t0' });
+  });
+
   it('moves a range of items and returns the new snapshot', async () => {
     const fetchMock = mockFetch(jsonResponse({ snapshot_id: 's2' }), jsonResponse({ snapshot_id: 's3' }));
     const move = { rangeStart: 5, rangeLength: 2, insertBefore: 0 };

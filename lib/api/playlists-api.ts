@@ -27,8 +27,11 @@ export const playlistsApi = {
   replaceTracks: (playlistId: string, uris: string[]) =>
     apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'PUT', body: { uris } }),
 
-  addTracks: (playlistId: string, uris: string[]) =>
-    apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'POST', body: { uris } }),
+  addTracks: (playlistId: string, uris: string[], position?: number) =>
+    apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'POST', body: { uris, position } }),
+
+  removeTracks: (playlistId: string, positions: number[]) =>
+    apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'DELETE', body: { positions } }),
 
   create: (name: string, uris: string[]) =>
     apiRequest<PlaylistLink>('/api/playlists', { method: 'POST', body: { name, uris } }),

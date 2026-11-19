@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   artistGenresQuerySchema,
   bridgeQuerySchema,
+  lyricsQuerySchema,
+  lyricsSummaryRequestSchema,
+  metadataRequestSchema,
+  originsRequestSchema,
+  removeTracksRequestSchema,
   trackAnalysisRequestSchema,
   createPlaylistRequestSchema,
   playlistIdSchema,
@@ -65,5 +70,17 @@ describe('validation schemas', () => {
     expect(trackAnalysisRequestSchema.safeParse({ tracks: [{ ...track, trackId: '../x' }] }).success).toBe(false);
     expect(bridgeQuerySchema.parse({ from: 'a', to: 'b' })).toEqual({ from: 'a', to: 'b' });
     expect(bridgeQuerySchema.safeParse({ from: 'a' }).success).toBe(false);
+  });
+
+  it('validates insert positions, removals and metadata requests', () => {
+    expect(trackUrisRequestSchema.parse({ uris: ['spotify:track:a'], position: 3 }).position).toBe(3);
+    expect(trackUrisRequestSchema.safeParse({ uris: ['spotify:track:a'], position: -1 }).success).toBe(false);
+    expect(removeTracksRequestSchema.safeParse({ positions: [] }).success).toBe(false);
+    expect(removeTracksRequestSchema.parse({ positions: [0, 5] }).positions).toEqual([0, 5]);
+    expect(metadataRequestSchema.safeParse({ isrcs: Array(11).fill('GBAHS1600463') }).success).toBe(false);
+    expect(originsRequestSchema.safeParse({ ids: ['8f3f4d27-fb26-4c3e-9f2a-1c9b2a7f6e11'] }).success).toBe(true);
+    expect(originsRequestSchema.safeParse({ ids: ['x'] }).success).toBe(false);
+    expect(lyricsQuerySchema.parse({ title: 'A', artist: 'B', album: '', durationMs: '200000' }).durationMs).toBe(200000);
+    expect(lyricsSummaryRequestSchema.safeParse({ tracks: [{ trackId: '../x', title: 'A', artist: 'B', album: '', durationMs: 1 }] }).success).toBe(false);
   });
 });

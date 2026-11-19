@@ -23,7 +23,7 @@ export class UpstreamError extends Error {
 }
 
 export interface FetchJsonOptions {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   /** Serialized as JSON. */
   json?: unknown;

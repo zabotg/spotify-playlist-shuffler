@@ -6,6 +6,9 @@ const DEFAULT_RECOMMENDATION_COUNT = 20;
 const MAX_RECOMMENDATION_COUNT = 50;
 export const MAX_DETAILS_ISRCS = 50;
 export const MAX_ANALYSIS_TRACKS = 5;
+export const MAX_METADATA_ITEMS = 10;
+const MAX_REMOVALS = 500;
+const MAX_DURATION_MS = 60 * 60 * 1000;
 const MAX_GENRE_ARTISTS = 20;
 const MAX_TEXT_LENGTH = 300;
 
@@ -17,7 +20,15 @@ const isrcSchema = z.string().regex(/^[A-Za-z0-9]{12}$/, 'Invalid ISRC');
 const trackUriSchema = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/, 'Invalid Spotify track URI');
 const trackUrisSchema = z.array(trackUriSchema).min(1).max(MAX_PLAYLIST_TRACKS);
 
-export const trackUrisRequestSchema = z.object({ uris: trackUrisSchema });
+export const trackUrisRequestSchema = z.object({
+  uris: trackUrisSchema,
+  /** Where to insert the tracks; omitted means at the end. */
+  position: z.number().int().min(0).max(MAX_PLAYLIST_TRACKS).optional(),
+});
+
+export const removeTracksRequestSchema = z.object({
+  positions: z.array(z.number().int().min(0).max(MAX_PLAYLIST_TRACKS)).min(1).max(MAX_REMOVALS),
+});
 
 export const createPlaylistRequestSchema = z.object({
   name: z.string().trim().min(1).max(MAX_PLAYLIST_NAME_LENGTH),
@@ -60,5 +71,28 @@ export const trackAnalysisRequestSchema = z.object({
 });
 
 export const bridgeQuerySchema = z.object({ from: spotifyIdSchema, to: spotifyIdSchema });
+
+const musicBrainzIdSchema = z.uuid('Invalid MusicBrainz ID');
+
+const lyricsTrackSchema = z.object({
+  title: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+  artist: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+  album: z.string().trim().max(MAX_TEXT_LENGTH),
+  durationMs: z.coerce.number().int().min(0).max(MAX_DURATION_MS),
+});
+
+export const metadataRequestSchema = z.object({
+  isrcs: z.array(isrcSchema).min(1).max(MAX_METADATA_ITEMS),
+});
+
+export const originsRequestSchema = z.object({
+  ids: z.array(musicBrainzIdSchema).min(1).max(MAX_METADATA_ITEMS),
+});
+
+export const lyricsSummaryRequestSchema = z.object({
+  tracks: z.array(lyricsTrackSchema.extend({ trackId: spotifyIdSchema })).min(1).max(MAX_METADATA_ITEMS),
+});
+
+export const lyricsQuerySchema = lyricsTrackSchema;
 
 export type CreatePlaylistRequest = z.infer<typeof createPlaylistRequestSchema>;

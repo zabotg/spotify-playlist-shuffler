@@ -91,10 +91,24 @@ export class SpotifyClient {
     return snapshot_id;
   }
 
-  /** Batches run one after another so the tracks keep their order. */
-  async addTracksToPlaylist(playlistId: string, uris: readonly string[]): Promise<void> {
+  /**
+   * Adds tracks at the end, or at `position` when given. Batches run one after another so the
+   * tracks keep their order.
+   */
+  async addTracksToPlaylist(playlistId: string, uris: readonly string[], position?: number): Promise<void> {
+    for (const [index, batch] of chunk(uris, WRITE_BATCH_SIZE).entries()) {
+      const at = position === undefined ? {} : { position: position + index * WRITE_BATCH_SIZE };
+      await this.request(playlistItemsPath(playlistId), { method: 'POST', json: { uris: batch, ...at } });
+    }
+  }
+
+  /** Removes every copy of the given tracks. */
+  async removeTracks(playlistId: string, uris: readonly string[]): Promise<void> {
     for (const batch of chunk(uris, WRITE_BATCH_SIZE)) {
-      await this.request(playlistItemsPath(playlistId), { method: 'POST', json: { uris: batch } });
+      await this.request(playlistItemsPath(playlistId), {
+        method: 'DELETE',
+        json: { items: batch.map((uri) => ({ uri })) },
+      });
     }
   }
 
