@@ -1,59 +1,39 @@
 import pLimit from 'p-limit';
-import { applyTokens, isTokenExpired, type AuthenticatedSession } from '@/lib/auth/session';
+import { fetchJson, type FetchJsonOptions } from '@/lib/clients/http/fetch-json';
 import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/models/playlist';
-import { SpotifyApiError } from '@/lib/clients/spotify/errors';
-import { toPlaylistSummary, toPlaylistTracks, toTrack, toUser } from '@/lib/clients/spotify/mappers';
-import { refreshAccessToken } from '@/lib/clients/spotify/oauth';
-import type { RawArtist, RawPage, RawPlaylist, RawPlaylistEntry, RawTrack, RawUser } from '@/lib/clients/spotify/types';
 import { chunk, isDefined, range } from '@/lib/utils/array';
-import { sleep } from '@/lib/utils/async';
+import { SpotifyApiError } from './errors';
+import { toPlaylistSummary, toPlaylistTracks, toTrack, toUser } from './mappers';
+import type { RawArtist, RawPage, RawPlaylist, RawPlaylistEntry, RawTrack, RawUser } from './types';
 
 const API_BASE_URL = 'https://api.spotify.com/v1';
-const MAX_RETRIES = 3;
-const BASE_BACKOFF_MS = 500;
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_CONCURRENT_REQUESTS = 6;
 const PLAYLISTS_PAGE_SIZE = 50;
 const PLAYLIST_ITEMS_PAGE_SIZE = 100;
 const WRITE_BATCH_SIZE = 100;
 
-type HttpMethod = 'GET' | 'POST' | 'PUT';
+type RequestOptions = Pick<FetchJsonOptions, 'method' | 'json'>;
 
-interface RequestOptions {
-  method?: HttpMethod;
-  body?: unknown;
-}
+const toSpotifyError = (status: number, body: string) => new SpotifyApiError(status, body);
+const playlistItemsPath = (playlistId: string) => `/playlists/${encodeURIComponent(playlistId)}/items`;
 
 function withPagination(path: string, limit: number, offset: number): string {
   const separator = path.includes('?') ? '&' : '?';
   return `${path}${separator}limit=${limit}&offset=${offset}`;
 }
 
-function retryDelayMs(response: Response, attempt: number): number {
-  const retryAfterSeconds = Number(response.headers.get('Retry-After'));
-  if (response.status === 429 && retryAfterSeconds > 0) return retryAfterSeconds * 1000;
-  return BASE_BACKOFF_MS * 2 ** attempt;
-}
-
+/** Spotify Web API client for one access token. It knows nothing about sessions or cookies. */
 export class SpotifyClient {
   private readonly limit = pLimit(MAX_CONCURRENT_REQUESTS);
 
-  private constructor(private readonly accessToken: string) {}
-
-  static withAccessToken(accessToken: string): SpotifyClient {
-    return new SpotifyClient(accessToken);
-  }
-
-  static async forSession(session: AuthenticatedSession): Promise<SpotifyClient> {
-    if (isTokenExpired(session)) {
-      applyTokens(session, await refreshAccessToken(session.refreshToken));
-      await session.save();
-    }
-    return new SpotifyClient(session.accessToken);
-  }
+  constructor(private readonly accessToken: string) {}
 
   async getCurrentUser(): Promise<SpotifyUser> {
     return toUser(await this.request<RawUser>('/me'));
+  }
+
+  async getUser(userId: string): Promise<SpotifyUser> {
+    return toUser(await this.request<RawUser>(`/users/${encodeURIComponent(userId)}`));
   }
 
   async getAllPlaylists(): Promise<PlaylistSummary[]> {
@@ -66,12 +46,9 @@ export class SpotifyClient {
   }
 
   async getPlaylistTracks(playlistId: string): Promise<PlaylistTracks> {
-    const path = `/playlists/${encodeURIComponent(playlistId)}/items`;
-    return toPlaylistTracks(await this.fetchAllPages<RawPlaylistEntry>(path, PLAYLIST_ITEMS_PAGE_SIZE));
-  }
-
-  async getUser(userId: string): Promise<SpotifyUser> {
-    return toUser(await this.request<RawUser>(`/users/${encodeURIComponent(userId)}`));
+    return toPlaylistTracks(
+      await this.fetchAllPages<RawPlaylistEntry>(playlistItemsPath(playlistId), PLAYLIST_ITEMS_PAGE_SIZE),
+    );
   }
 
   async getArtistGenres(artistIds: readonly string[]): Promise<string[][]> {
@@ -91,26 +68,22 @@ export class SpotifyClient {
   async createPlaylist(name: string, description: string): Promise<PlaylistSummary> {
     const playlist = await this.request<RawPlaylist>('/me/playlists', {
       method: 'POST',
-      body: { name, description, public: false },
+      json: { name, description, public: false },
     });
     return toPlaylistSummary(playlist);
   }
 
+  /** Spotify accepts 100 URIs per call: the first batch replaces, the rest are appended in order. */
   async replacePlaylistTracks(playlistId: string, uris: readonly string[]): Promise<void> {
     const [firstBatch = [], ...remainingBatches] = chunk(uris, WRITE_BATCH_SIZE);
-    await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
-      method: 'PUT',
-      body: { uris: firstBatch },
-    });
+    await this.request(playlistItemsPath(playlistId), { method: 'PUT', json: { uris: firstBatch } });
     await this.addTracksToPlaylist(playlistId, remainingBatches.flat());
   }
 
+  /** Batches run one after another so the tracks keep their order. */
   async addTracksToPlaylist(playlistId: string, uris: readonly string[]): Promise<void> {
     for (const batch of chunk(uris, WRITE_BATCH_SIZE)) {
-      await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
-        method: 'POST',
-        body: { uris: batch },
-      });
+      await this.request(playlistItemsPath(playlistId), { method: 'POST', json: { uris: batch } });
     }
   }
 
@@ -125,28 +98,12 @@ export class SpotifyClient {
   }
 
   private request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    return this.limit(() => this.send<T>(path, options));
-  }
-
-  private async send<T>(path: string, { method = 'GET', body }: RequestOptions, attempt = 0): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: 'no-store',
-    });
-
-    if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_RETRIES) {
-      await sleep(retryDelayMs(response, attempt));
-      return this.send<T>(path, { method, body }, attempt + 1);
-    }
-
-    if (!response.ok) throw new SpotifyApiError(response.status, await response.text());
-
-    const text = await response.text();
-    return (text ? JSON.parse(text) : undefined) as T;
+    return this.limit(() =>
+      fetchJson<T>(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+        toError: toSpotifyError,
+      }),
+    );
   }
 }

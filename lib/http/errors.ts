@@ -4,7 +4,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'VALIDATION_ERROR'
   | 'CONFLICT'
-  | 'EMPTY_PLAYLIST'
+  | 'PAYLOAD_TOO_LARGE'
   | 'RATE_LIMITED'
   | 'SPOTIFY_ERROR'
   | 'INTERNAL_ERROR';

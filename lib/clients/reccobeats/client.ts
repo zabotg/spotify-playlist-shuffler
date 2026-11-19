@@ -1,8 +1,5 @@
-import pLimit from 'p-limit';
+import { fetchJsonOrNull } from '@/lib/clients/http/fetch-json';
 import type { AudioFeatures } from '@/lib/domain/models/playlist';
-import { chunk } from '@/lib/utils/array';
-import { sleep } from '@/lib/utils/async';
-import { TtlCache } from '@/lib/utils/ttl-cache';
 
 /**
  * ReccoBeats is a free public API with the audio features Spotify no longer gives to new apps
@@ -10,38 +7,11 @@ import { TtlCache } from '@/lib/utils/ttl-cache';
  * https://reccobeats.com/docs
  */
 const RECCOBEATS_API_URL = 'https://api.reccobeats.com/v1';
-const MAX_IDS_PER_REQUEST = 40;
-const MAX_CONCURRENT_REQUESTS = 4;
-const MAX_RETRIES = 2;
-const DEFAULT_RETRY_DELAY_MS = 1000;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_MAX_ENTRIES = 50_000;
-const SPOTIFY_TRACK_ID_PATTERN = /track\/([A-Za-z0-9]+)/;
-
-const limit = pLimit(MAX_CONCURRENT_REQUESTS);
-/** `null` means ReccoBeats has no data for the track, so it is not asked again. */
-const cache = new TtlCache<string, AudioFeatures | null>(CACHE_TTL_MS, CACHE_MAX_ENTRIES);
+export const RECCOBEATS_MAX_IDS_PER_REQUEST = 40;
+const SPOTIFY_TRACK_ID_PATTERN = /open\.spotify\.com\/track\/([A-Za-z0-9]+)/;
 
 interface RawReccoBeatsFeatures extends Omit<AudioFeatures, 'id'> {
   href: string;
-}
-
-async function fetchBatch(trackIds: readonly string[], attempt = 0): Promise<RawReccoBeatsFeatures[] | null> {
-  try {
-    const response = await fetch(`${RECCOBEATS_API_URL}/audio-features?ids=${trackIds.join(',')}`, {
-      cache: 'no-store',
-    });
-    if (response.status === 429 && attempt < MAX_RETRIES) {
-      const retryAfterSeconds = Number(response.headers.get('Retry-After'));
-      await sleep(retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : DEFAULT_RETRY_DELAY_MS);
-      return fetchBatch(trackIds, attempt + 1);
-    }
-    if (!response.ok) return null;
-    const body = (await response.json()) as { content?: RawReccoBeatsFeatures[] };
-    return body.content ?? [];
-  } catch {
-    return null;
-  }
 }
 
 function toAudioFeatures(spotifyId: string, raw: RawReccoBeatsFeatures): AudioFeatures {
@@ -61,31 +31,26 @@ function toAudioFeatures(spotifyId: string, raw: RawReccoBeatsFeatures): AudioFe
   };
 }
 
-/** Audio features by Spotify track ID. Tracks ReccoBeats doesn't know are left out. */
-export async function getAudioFeatures(trackIds: readonly string[]): Promise<Map<string, AudioFeatures>> {
-  const uniqueIds = [...new Set(trackIds)];
-  const missingIds = uniqueIds.filter((id) => !cache.has(id));
+/**
+ * Audio features for up to 40 Spotify track IDs, keyed by ID. Tracks ReccoBeats doesn't know
+ * are missing from the map. Returns `null` when the request itself failed.
+ */
+export async function getAudioFeaturesBatch(trackIds: readonly string[]): Promise<Map<string, AudioFeatures> | null> {
+  if (trackIds.length === 0) return new Map();
+  if (trackIds.length > RECCOBEATS_MAX_IDS_PER_REQUEST) {
+    throw new RangeError(`ReccoBeats accepts at most ${RECCOBEATS_MAX_IDS_PER_REQUEST} IDs per request`);
+  }
 
-  await Promise.all(
-    chunk(missingIds, MAX_IDS_PER_REQUEST).map((batch) =>
-      limit(async () => {
-        const results = await fetchBatch(batch);
-        if (!results) return; // network or server error: don't cache, try again next time
-
-        const found = new Map<string, AudioFeatures>();
-        for (const raw of results) {
-          const spotifyId = SPOTIFY_TRACK_ID_PATTERN.exec(raw.href)?.[1];
-          if (spotifyId) found.set(spotifyId, toAudioFeatures(spotifyId, raw));
-        }
-        for (const id of batch) cache.set(id, found.get(id) ?? null);
-      }),
-    ),
+  const ids = trackIds.map(encodeURIComponent).join(',');
+  const body = await fetchJsonOrNull<{ content?: RawReccoBeatsFeatures[] }>(
+    `${RECCOBEATS_API_URL}/audio-features?ids=${ids}`,
   );
+  if (!body) return null;
 
   const featuresById = new Map<string, AudioFeatures>();
-  for (const id of uniqueIds) {
-    const features = cache.get(id);
-    if (features) featuresById.set(id, features);
+  for (const raw of body.content ?? []) {
+    const spotifyId = SPOTIFY_TRACK_ID_PATTERN.exec(raw.href)?.[1];
+    if (spotifyId) featuresById.set(spotifyId, toAudioFeatures(spotifyId, raw));
   }
   return featuresById;
 }

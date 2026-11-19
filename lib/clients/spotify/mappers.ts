@@ -6,7 +6,7 @@ import type {
   RawPlaylistItem,
   RawTrack,
   RawUser,
-} from '@/lib/clients/spotify/types';
+} from './types';
 
 const HTML_TAG_PATTERN = /<[^>]+>/g;
 

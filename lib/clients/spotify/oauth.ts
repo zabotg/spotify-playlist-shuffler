@@ -1,5 +1,6 @@
+import { fetchJson } from '@/lib/clients/http/fetch-json';
 import { getEnv } from '@/lib/config/env';
-import { SpotifyApiError } from '@/lib/clients/spotify/errors';
+import { SpotifyApiError } from './errors';
 
 const SPOTIFY_AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
@@ -44,20 +45,19 @@ export function refreshAccessToken(refreshToken: string): Promise<TokenResponse>
   return requestToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
 }
 
-async function requestToken(params: Record<string, string>): Promise<TokenResponse> {
+function requestToken(params: Record<string, string>): Promise<TokenResponse> {
   const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } = getEnv();
   const credentials = Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64');
 
-  const response = await fetch(SPOTIFY_TOKEN_URL, {
+  return fetchJson<TokenResponse>(SPOTIFY_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${credentials}`,
     },
     body: new URLSearchParams(params),
-    cache: 'no-store',
+    // Authorization codes are single use: never retry the token request.
+    maxRetries: 0,
+    toError: (status, body) => new SpotifyApiError(status, body),
   });
-
-  if (!response.ok) throw new SpotifyApiError(response.status, await response.text());
-  return response.json() as Promise<TokenResponse>;
 }

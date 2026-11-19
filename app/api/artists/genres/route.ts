@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { parseSearchParams, withErrorHandling } from '@/lib/http/route-handler';
-import { getSpotifyContext } from '@/lib/services/spotify-context';
+import { parseSearchParams, withSpotify } from '@/lib/http/route-handler';
 import { artistGenresQuerySchema } from '@/lib/validation/schemas';
 
-export const GET = withErrorHandling(async (request) => {
-  const { client } = await getSpotifyContext();
+export const GET = withSpotify(async ({ request, client }) => {
   const { ids } = parseSearchParams(request, artistGenresQuerySchema);
   return NextResponse.json({ genres: await client.getArtistGenres(ids) });
 });

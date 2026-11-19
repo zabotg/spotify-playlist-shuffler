@@ -8,6 +8,11 @@ export const MAX_DETAILS_ISRCS = 50;
 const MAX_GENRE_ARTISTS = 20;
 const MAX_TEXT_LENGTH = 300;
 
+/** Spotify IDs are base62. */
+const spotifyIdSchema = z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Invalid Spotify ID');
+export const playlistIdSchema = spotifyIdSchema;
+const isrcSchema = z.string().regex(/^[A-Za-z0-9]{12}$/, 'Invalid ISRC');
+
 const trackUriSchema = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/, 'Invalid Spotify track URI');
 const trackUrisSchema = z.array(trackUriSchema).min(1).max(MAX_PLAYLIST_TRACKS);
 
@@ -23,14 +28,11 @@ export const recommendationsQuerySchema = z.object({
 });
 
 export const trackDetailsRequestSchema = z.object({
-  isrcs: z.array(z.string().regex(/^[A-Za-z0-9]{12}$/, 'Invalid ISRC')).min(1).max(MAX_DETAILS_ISRCS),
+  isrcs: z.array(isrcSchema).min(1).max(MAX_DETAILS_ISRCS),
 });
 
-const spotifyIdSchema = z.string().regex(/^[A-Za-z0-9]{1,64}$/, 'Invalid Spotify ID');
-
 export const previewQuerySchema = z.object({
-  trackId: spotifyIdSchema,
-  isrc: z.string().regex(/^[A-Za-z0-9]{12}$/).optional(),
+  isrc: isrcSchema.optional(),
   title: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
   artist: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
 });

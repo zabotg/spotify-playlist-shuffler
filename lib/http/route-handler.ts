@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ZodError, type ZodType } from 'zod';
 import { SpotifyApiError } from '@/lib/clients/spotify/errors';
+import { getSpotifyContext, type SpotifyContext } from '@/lib/services/spotify-context';
+import { playlistIdSchema } from '@/lib/validation/schemas';
 import { HttpError, type ApiErrorBody, type ErrorCode } from './errors';
+
+/** Request bodies are small JSON documents; anything bigger is rejected before parsing. */
+export const MAX_JSON_BODY_BYTES = 1024 * 1024;
 
 export interface PlaylistRouteContext {
   params: Promise<{ id: string }>;
@@ -21,6 +26,7 @@ function errorResponse([status, code, message]: ErrorMapping): NextResponse<ApiE
   return NextResponse.json({ error: code, message }, { status });
 }
 
+/** Maps any error to a safe JSON response. Upstream bodies and stack traces never reach the client. */
 export function toErrorResponse(error: unknown): NextResponse<ApiErrorBody> {
   if (error instanceof HttpError) return errorResponse([error.status, error.code, error.message]);
   if (error instanceof ZodError) {
@@ -31,7 +37,7 @@ export function toErrorResponse(error: unknown): NextResponse<ApiErrorBody> {
     return errorResponse(SPOTIFY_ERROR_MAPPINGS[error.status] ?? DEFAULT_SPOTIFY_ERROR);
   }
 
-  console.error('[api] Unexpected error', error);
+  console.error('[api] Unexpected error', error instanceof Error ? error.message : error);
   return errorResponse([500, 'INTERNAL_ERROR', 'Unexpected server error.']);
 }
 
@@ -47,8 +53,37 @@ export function withErrorHandling<Context>(
   };
 }
 
+export interface AuthenticatedRequest extends SpotifyContext {
+  request: NextRequest;
+}
+
+export interface PlaylistRequest extends AuthenticatedRequest {
+  playlistId: string;
+}
+
+/** Controller for routes that need the signed-in user: answers 401 when signed out. */
+export function withSpotify(handler: (input: AuthenticatedRequest) => Promise<Response>) {
+  return withErrorHandling(async (request: NextRequest) => handler({ request, ...(await getSpotifyContext()) }));
+}
+
+/** Controller for `/api/playlists/:id/...` routes: requires a session, then validates the ID. */
+export function withPlaylist(handler: (input: PlaylistRequest) => Promise<Response>) {
+  return withErrorHandling(async (request: NextRequest, { params }: PlaylistRouteContext) => {
+    const context = await getSpotifyContext();
+    const playlistId = playlistIdSchema.parse((await params).id);
+    return handler({ request, playlistId, ...context });
+  });
+}
+
 export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
-  return schema.parse(await request.json());
+  const declaredLength = Number(request.headers.get('content-length'));
+  if (declaredLength > MAX_JSON_BODY_BYTES) throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
+
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_JSON_BODY_BYTES) {
+    throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
+  }
+  return schema.parse(JSON.parse(text));
 }
 
 export function parseSearchParams<T>(request: NextRequest, schema: ZodType<T>): T {

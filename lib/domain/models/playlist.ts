@@ -97,3 +97,10 @@ export function toPlaylistLink(playlistId: string): PlaylistLink {
 export function primaryArtistId(track: Track): string {
   return track.artists[0]?.id ?? 'unknown';
 }
+
+const EARLIEST_VALID_YEAR = 1900;
+
+export function releaseYear(track: Pick<Track, 'releaseDate'>): number | null {
+  const year = Number(track.releaseDate?.slice(0, 4));
+  return year > EARLIEST_VALID_YEAR ? year : null;
+}

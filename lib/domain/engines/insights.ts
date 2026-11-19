@@ -3,19 +3,13 @@ import {
   type AudioFeatureKey,
   type PlaylistInsights,
 } from '@/lib/domain/models/insights';
-import type { AudioFeatures, EnrichedTrack } from '@/lib/domain/models/playlist';
+import { releaseYear, type AudioFeatures, type EnrichedTrack } from '@/lib/domain/models/playlist';
 import { average, countBy, isDefined, sum, topEntries } from '@/lib/utils/array';
 import { rankArtistsByTrackCount } from './artists';
 import { classifyMoodQuadrant, deriveMoodLabel } from './mood';
 
 const TOP_ARTIST_LIMIT = 10;
 const TOP_GENRE_LIMIT = 5;
-const EARLIEST_VALID_YEAR = 1900;
-
-function releaseYear(releaseDate: string | null): number | null {
-  const year = Number(releaseDate?.slice(0, 4));
-  return year > EARLIEST_VALID_YEAR ? year : null;
-}
 
 function toDecade(year: number): string {
   return `${Math.floor(year / 10) * 10}s`;
@@ -41,7 +35,7 @@ export function computeInsights(
     share: trackCount > 0 ? artist.trackCount / trackCount : 0,
   }));
 
-  const years = tracks.map((track) => releaseYear(track.releaseDate)).filter(isDefined);
+  const years = tracks.map((track) => releaseYear(track)).filter(isDefined);
   const averageYear = average(years);
 
   const featureAverages = averageAudioFeatures(items.map((item) => item.features).filter(isDefined));
