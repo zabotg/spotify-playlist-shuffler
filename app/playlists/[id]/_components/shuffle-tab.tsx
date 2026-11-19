@@ -187,7 +187,7 @@ export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
           <h3 className="text-sm font-semibold text-zinc-300">
             {orderedTracks.length} tracks · click a column header to sort
           </h3>
-          <TrackTable tracks={orderedTracks} sort={sort} onSortChange={setSort} />
+          <TrackTable tracks={orderedTracks} sort={sort} onSortChange={setSort} initialView="audio" />
 
           <SaveDestinationForm
             currentLabel="Overwrite this playlist"

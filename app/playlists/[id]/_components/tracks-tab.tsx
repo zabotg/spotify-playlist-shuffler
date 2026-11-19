@@ -34,7 +34,7 @@ export function TracksTab({ tracks }: { tracks: EnrichedTrack[] }) {
           placeholder="Search title, artist or album"
           className="w-full max-w-xs rounded-full border border-zinc-700 bg-zinc-900 px-4 py-1.5 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
         />
-        <span className="text-xs text-zinc-500">Click a column header to sort · ▶ plays a 30s preview</span>
+        <span className="text-xs text-zinc-500">Click a column header to sort · press play for a 30s preview</span>
       </div>
       <TrackTable tracks={visibleTracks} sort={sort} onSortChange={setSort} />
     </div>

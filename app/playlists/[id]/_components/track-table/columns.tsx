@@ -1,4 +1,6 @@
+import { Clock3 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatCamelot, toCamelot } from '@/lib/domain/engines/camelot';
 import { CoverImage } from '@/components/ui/cover-image';
 import { releaseYear, type EnrichedTrack } from '@/lib/domain/models/playlist';
 import {
@@ -30,6 +32,9 @@ export type ColumnKey =
 
 /** Columns only shown when at least one track has that kind of data. */
 export type ColumnGroup = 'always' | 'added' | 'features';
+
+/** What the table focuses on. "overview" mirrors Spotify; "audio" shows the sound of each track. */
+export type TableView = 'overview' | 'audio' | 'all';
 export type ColumnAlign = 'left' | 'right' | 'center';
 
 export interface Column {
@@ -38,6 +43,8 @@ export interface Column {
   title?: string;
   align: ColumnAlign;
   group: ColumnGroup;
+  /** Views that show this column, besides "all". */
+  views: readonly Exclude<TableView, 'all'>[];
   cellClassName?: string;
   sortValue: (item: EnrichedTrack) => SortValue;
   render: (item: EnrichedTrack) => ReactNode;
@@ -57,6 +64,18 @@ function orMissing<T>(value: T | null, render: (value: T) => ReactNode): ReactNo
 
 type FeatureRatioKey = 'energy' | 'danceability' | 'valence' | 'acousticness' | 'instrumentalness';
 
+/** A 0-1 value as a small bar plus its percentage: easier to compare down a column than numbers. */
+function RatioCell({ value }: { value: number }) {
+  return (
+    <div className="flex items-center justify-end gap-2" title={formatPercent(value)}>
+      <div className="h-1.5 w-12 overflow-hidden rounded-full bg-zinc-800" aria-hidden>
+        <div className="h-full rounded-full bg-spotify" style={{ width: formatPercent(value) }} />
+      </div>
+      <span className="w-9 text-right">{formatPercent(value)}</span>
+    </div>
+  );
+}
+
 function ratioColumn(key: FeatureRatioKey, label: string, title: string): Column {
   return {
     key,
@@ -64,9 +83,20 @@ function ratioColumn(key: FeatureRatioKey, label: string, title: string): Column
     title,
     align: 'right',
     group: 'features',
+    views: ['audio'],
     sortValue: (item) => item.features?.[key] ?? null,
-    render: (item) => orMissing(item.features?.[key] ?? null, formatPercent),
+    render: (item) => orMissing(item.features?.[key] ?? null, (value) => <RatioCell value={value} />),
   };
+}
+
+function KeyCell({ keyIndex, mode }: { keyIndex: number; mode: number }) {
+  const camelot = toCamelot(keyIndex, mode);
+  if (!camelot) return MISSING_VALUE;
+  return (
+    <span className="whitespace-nowrap">
+      {formatMusicalKey(keyIndex, mode)} <span className="text-xs text-zinc-500">· {formatCamelot(camelot)}</span>
+    </span>
+  );
 }
 
 function ExplicitBadge() {
@@ -99,6 +129,7 @@ function TitleCell({ item }: { item: EnrichedTrack }) {
 export const COLUMNS: readonly Column[] = [
   {
     key: 'name',
+    views: ['overview', 'audio'],
     label: 'Title',
     align: 'left',
     group: 'always',
@@ -108,6 +139,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'album',
+    views: ['overview'],
     label: 'Album',
     align: 'left',
     group: 'always',
@@ -117,6 +149,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'addedBy',
+    views: ['overview'],
     label: 'Added by',
     align: 'left',
     group: 'added',
@@ -126,6 +159,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'addedAt',
+    views: ['overview'],
     label: 'Date added',
     align: 'left',
     group: 'added',
@@ -135,6 +169,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'year',
+    views: ['overview'],
     label: 'Year',
     title: 'Release year',
     align: 'right',
@@ -145,6 +180,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'bpm',
+    views: ['audio'],
     label: 'BPM',
     title: 'Tempo in beats per minute',
     align: 'right',
@@ -154,13 +190,16 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'key',
+    views: ['audio'],
     label: 'Key',
     title: 'Musical key',
     align: 'center',
     group: 'features',
     cellClassName: 'whitespace-nowrap',
-    sortValue: (item) => (item.features ? item.features.key * 2 + item.features.mode : null),
-    render: (item) => orMissing(item.features, (features) => formatMusicalKey(features.key, features.mode)),
+    sortValue: (item) =>
+      item.features && item.features.key >= 0 ? item.features.key * 2 + item.features.mode : null,
+    render: (item) =>
+      orMissing(item.features, (features) => <KeyCell keyIndex={features.key} mode={features.mode} />),
   },
   ratioColumn('energy', 'Energy', 'Intensity and activity'),
   ratioColumn('danceability', 'Dance', 'How suitable the track is for dancing'),
@@ -169,6 +208,7 @@ export const COLUMNS: readonly Column[] = [
   ratioColumn('instrumentalness', 'Instr.', 'Confidence that the track has no vocals'),
   {
     key: 'loudness',
+    views: ['audio'],
     label: 'Loudness',
     title: 'Average loudness in decibels',
     align: 'right',
@@ -179,6 +219,7 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'popularity',
+    views: ['overview'],
     label: 'Popularity',
     title: 'Deezer rank: higher is more popular',
     align: 'right',
@@ -188,7 +229,8 @@ export const COLUMNS: readonly Column[] = [
   },
   {
     key: 'duration',
-    label: '⏱',
+    views: ['overview'],
+    label: <Clock3 className="inline h-3.5 w-3.5" aria-label="Duration" />,
     title: 'Duration',
     align: 'right',
     group: 'always',
@@ -204,9 +246,11 @@ export function findColumn(key: string): Column | undefined {
   return COLUMNS_BY_KEY.get(key as ColumnKey);
 }
 
-export function visibleColumns(tracks: readonly EnrichedTrack[]): Column[] {
+export function visibleColumns(tracks: readonly EnrichedTrack[], view: TableView = 'all'): Column[] {
   const groups = new Set<ColumnGroup>(['always']);
   if (tracks.some((item) => item.features !== null)) groups.add('features');
   if (tracks.some((item) => item.addedAt !== null)) groups.add('added');
-  return COLUMNS.filter((column) => groups.has(column.group));
+  return COLUMNS.filter(
+    (column) => groups.has(column.group) && (view === 'all' || (column.views as readonly string[]).includes(view)),
+  );
 }

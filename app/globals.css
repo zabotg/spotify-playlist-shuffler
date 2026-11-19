@@ -12,3 +12,25 @@
 body {
   @apply bg-black text-white;
 }
+
+/* Clickable things look clickable, and keyboard focus is always visible. */
+button:not(:disabled),
+[role='tab'],
+summary,
+label:has(input[type='checkbox']) {
+  cursor: pointer;
+}
+
+:where(button, a, input, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-spotify);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

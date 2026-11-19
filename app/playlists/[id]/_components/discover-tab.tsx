@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { CoverImage } from '@/components/ui/cover-image';
 import { playlistsApi } from '@/lib/api/playlists-api';
-import type { Track } from '@/lib/domain/models/playlist';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { pluralize } from '@/lib/utils/format';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';
+import { DEFAULT_SORT, sortTracks, TrackTable, type TrackSort } from './track-table/track-table';
 
 const RECOMMENDATION_COUNT = 20;
 const DEFAULT_NEW_PLAYLIST_NAME = 'Discovered Tracks';
@@ -20,34 +20,6 @@ function toggleInSet(set: ReadonlySet<string>, value: string): Set<string> {
   return next;
 }
 
-interface RecommendationRowProps {
-  track: Track;
-  isSelected: boolean;
-  onToggle: () => void;
-}
-
-function RecommendationRow({ track, isSelected, onToggle }: RecommendationRowProps) {
-  return (
-    <button
-      type="button"
-      aria-pressed={isSelected}
-      onClick={onToggle}
-      className={`flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
-        isSelected ? 'border-spotify/30 bg-spotify/10' : 'border-transparent hover:bg-zinc-800'
-      }`}
-    >
-      <CoverImage src={track.imageUrl} alt="" sizes="40px" className="h-10 w-10" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{track.name}</div>
-        <div className="truncate text-xs text-zinc-400">
-          {track.artists.map((artist) => artist.name).join(', ')} · {track.albumName}
-        </div>
-      </div>
-      {isSelected && <span className="shrink-0 text-sm text-spotify">✓</span>}
-    </button>
-  );
-}
-
 interface DiscoverTabProps {
   playlistId: string;
   canEdit: boolean;
@@ -55,6 +27,7 @@ interface DiscoverTabProps {
 
 export function DiscoverTab({ playlistId, canEdit }: DiscoverTabProps) {
   const [selectedUris, setSelectedUris] = useState<ReadonlySet<string>>(new Set());
+  const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
   const recommendations = useAsyncAction(playlistsApi.recommendations);
   const save = useAsyncAction((destination: SaveDestination, uris: string[]) =>
     destination.target === 'current'
@@ -62,18 +35,25 @@ export function DiscoverTab({ playlistId, canEdit }: DiscoverTabProps) {
       : playlistsApi.create(destination.name, uris),
   );
 
+  const toggleSelected = useCallback((uri: string) => setSelectedUris((current) => toggleInSet(current, uri)), []);
+  const selection = useMemo(() => ({ selected: selectedUris, onToggle: toggleSelected }), [selectedUris, toggleSelected]);
+  const tracks = recommendations.data?.tracks;
+  const orderedTracks = useMemo(() => sortTracks(tracks ?? [], sort), [tracks, sort]);
+
   function loadRecommendations() {
     setSelectedUris(new Set());
+    setSort(DEFAULT_SORT);
     save.reset();
     void recommendations.run(playlistId, RECOMMENDATION_COUNT);
   }
 
-  const tracks = recommendations.data?.tracks;
-
   if (!tracks) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
-        <p className="max-w-sm text-sm text-zinc-400">Find new songs from artists similar to the ones in this playlist.</p>
+        <p className="max-w-sm text-sm text-zinc-400">
+          Find new songs that sound like this playlist. Listen to a preview and compare their tempo, key and mood
+          before adding them.
+        </p>
         <Button disabled={recommendations.isLoading} onClick={loadRecommendations}>
           {recommendations.isLoading ? 'Searching…' : 'Discover songs'}
         </Button>
@@ -90,23 +70,17 @@ export function DiscoverTab({ playlistId, canEdit }: DiscoverTabProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="text-sm text-zinc-400">
-          {selectedUris.size} of {tracks.length} selected
+          {selectedUris.size} of {tracks.length} selected · press play for a 30s preview
         </span>
         <Button variant="ghost" className="text-xs" disabled={recommendations.isLoading} onClick={loadRecommendations}>
-          {recommendations.isLoading ? 'Searching…' : '↻ Refresh'}
+          {recommendations.isLoading ? 'Searching…' : <>
+            <RefreshCw aria-hidden className="mr-1 inline h-3.5 w-3.5" />
+            Refresh
+          </>}
         </Button>
       </div>
 
-      <div className="flex flex-col gap-1">
-        {tracks.map((track) => (
-          <RecommendationRow
-            key={track.id}
-            track={track}
-            isSelected={selectedUris.has(track.uri)}
-            onToggle={() => setSelectedUris((current) => toggleInSet(current, track.uri))}
-          />
-        ))}
-      </div>
+      <TrackTable tracks={orderedTracks} sort={sort} onSortChange={setSort} selection={selection} initialView="audio" />
 
       {selectedUris.size > 0 && (
         <SaveDestinationForm
