@@ -27,8 +27,14 @@ export interface PlaylistSummary {
   trackCount: number;
 }
 
+export interface PlaylistItem {
+  track: Track;
+  addedAt: string | null;
+  addedById: string | null;
+}
+
 export interface PlaylistTracks {
-  tracks: Track[];
+  items: PlaylistItem[];
   skippedItemCount: number;
 }
 
@@ -47,11 +53,27 @@ export interface AudioFeatures {
   loudness: number;
 }
 
+/** Extra details from Deezer, loaded in the background because Deezer is rate limited. */
+export interface TrackDetails {
+  bpm: number | null;
+  /** Deezer rank: a popularity score where higher means more popular. */
+  popularity: number | null;
+}
+
 export interface EnrichedTrack {
   track: Track;
+  addedAt: string | null;
+  addedBy: string | null;
+  /** Audio features from ReccoBeats (same data Spotify used to expose). */
   features: AudioFeatures | null;
+  /** Tempo from the audio features, or Deezer as a fallback. */
   bpm: number | null;
-  previewUrl: string | null;
+  popularity: number | null;
+}
+
+export interface EnrichedPlaylistTracks {
+  tracks: EnrichedTrack[];
+  skippedItemCount: number;
 }
 
 export interface SpotifyUser {

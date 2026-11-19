@@ -1,15 +1,19 @@
 'use client';
 
-import { ErrorAlert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { useEffect, useMemo } from 'react';
 import { HorizontalBarChart, RatioBar, StatCard } from '@/components/ui/charts';
-import { playlistsApi } from '@/lib/api/client';
+import { artistsApi } from '@/lib/api/client';
 import { AUDIO_FEATURE_KEYS, type PlaylistInsights } from '@/lib/domain/insights';
+import type { EnrichedTrack } from '@/lib/domain/playlist';
+import { rankArtistsByTrackCount } from '@/lib/engines/artists';
+import { computeInsights } from '@/lib/engines/insights';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { formatDuration, formatPercent } from '@/lib/utils/format';
 import { AUDIO_FEATURE_DISPLAY } from './labels';
 
 const MISSING = '—';
+const GENRE_SAMPLE_ARTIST_LIMIT = 10;
+const NO_GENRES: string[][] = [];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -65,7 +69,7 @@ function InsightsReport({ insights }: { insights: PlaylistInsights }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-zinc-500 italic">Requires Spotify extended API access.</p>
+          <p className="text-xs text-zinc-500 italic">No audio data found for these tracks.</p>
         )}
       </Section>
 
@@ -94,26 +98,32 @@ function InsightsReport({ insights }: { insights: PlaylistInsights }) {
   );
 }
 
-export function InsightsTab({ playlistId }: { playlistId: string }) {
-  const { data, error, isLoading, run } = useAsyncAction(playlistsApi.insights);
+interface InsightsTabProps {
+  tracks: EnrichedTrack[];
+  skippedItemCount: number;
+}
 
-  if (data) {
-    return data.insights ? (
-      <InsightsReport insights={data.insights} />
-    ) : (
-      <p className="py-8 text-center text-sm text-zinc-400">This playlist has no tracks to analyze.</p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-4 py-16 text-center">
-      <p className="max-w-sm text-sm text-zinc-400">
-        Analyze the artists, release decades and audio characteristics of this playlist.
-      </p>
-      <Button disabled={isLoading} onClick={() => void run(playlistId)}>
-        {isLoading ? 'Analyzing…' : 'Analyze playlist'}
-      </Button>
-      <ErrorAlert message={error} />
-    </div>
+export function InsightsTab({ tracks, skippedItemCount }: InsightsTabProps) {
+  const genres = useAsyncAction(artistsApi.genres);
+  const sampleArtistIds = useMemo(
+    () => rankArtistsByTrackCount(tracks.map((item) => item.track), GENRE_SAMPLE_ARTIST_LIMIT).map((artist) => artist.id),
+    [tracks],
   );
+  const sampleKey = sampleArtistIds.join(',');
+
+  const runGenres = genres.run;
+  useEffect(() => {
+    if (sampleKey) void runGenres(sampleKey.split(','));
+  }, [runGenres, sampleKey]);
+
+  const artistGenres = genres.data?.genres ?? NO_GENRES;
+  const insights = useMemo(
+    () => (tracks.length > 0 ? computeInsights(tracks, skippedItemCount, artistGenres) : null),
+    [tracks, skippedItemCount, artistGenres],
+  );
+
+  if (!insights) {
+    return <p className="py-8 text-center text-sm text-zinc-400">This playlist has no tracks to analyze.</p>;
+  }
+  return <InsightsReport insights={insights} />;
 }

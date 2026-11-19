@@ -19,12 +19,17 @@ function rawTrack(overrides: Partial<RawTrack> = {}): RawTrack {
 
 describe('toPlaylistTracks', () => {
   it('reads the item field used by the current Spotify API', () => {
-    const { tracks } = toPlaylistTracks([{ item: rawTrack() }]);
-    expect(tracks[0]).toMatchObject({ id: 'abc', isrc: 'US1234567890', imageUrl: 'https://i.scdn.co/image/1' });
+    const { items } = toPlaylistTracks([{ item: rawTrack() }]);
+    expect(items[0]?.track).toMatchObject({ id: 'abc', isrc: 'US1234567890', imageUrl: 'https://i.scdn.co/image/1' });
   });
 
   it('still reads the legacy track field', () => {
-    expect(toPlaylistTracks([{ track: rawTrack() }]).tracks).toHaveLength(1);
+    expect(toPlaylistTracks([{ track: rawTrack() }]).items).toHaveLength(1);
+  });
+
+  it('keeps who added each track and when', () => {
+    const { items } = toPlaylistTracks([{ item: rawTrack(), added_at: '2025-01-23T10:00:00Z', added_by: { id: 'me' } }]);
+    expect(items[0]).toMatchObject({ addedAt: '2025-01-23T10:00:00Z', addedById: 'me' });
   });
 
   it('counts local files, episodes and removed tracks as skipped', () => {
@@ -34,7 +39,7 @@ describe('toPlaylistTracks', () => {
       { item: { type: 'episode' } },
       { item: null },
     ]);
-    expect(result.tracks).toHaveLength(1);
+    expect(result.items).toHaveLength(1);
     expect(result.skippedItemCount).toBe(3);
   });
 });

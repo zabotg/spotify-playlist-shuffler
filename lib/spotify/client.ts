@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { applyTokens, isTokenExpired, type AuthenticatedSession } from '@/lib/auth/session';
-import type { AudioFeatures, PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
-import { isAccessRestricted, SpotifyApiError } from '@/lib/spotify/errors';
+import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
+import { SpotifyApiError } from '@/lib/spotify/errors';
 import { toPlaylistSummary, toPlaylistTracks, toTrack, toUser } from '@/lib/spotify/mappers';
 import { refreshAccessToken } from '@/lib/spotify/oauth';
 import type { RawArtist, RawPage, RawPlaylist, RawPlaylistEntry, RawTrack, RawUser } from '@/lib/spotify/types';
@@ -12,11 +12,10 @@ const API_BASE_URL = 'https://api.spotify.com/v1';
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 500;
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-const MAX_CONCURRENT_REQUESTS = 4;
+const MAX_CONCURRENT_REQUESTS = 6;
 const PLAYLISTS_PAGE_SIZE = 50;
 const PLAYLIST_ITEMS_PAGE_SIZE = 100;
 const WRITE_BATCH_SIZE = 100;
-const AUDIO_FEATURES_BATCH_SIZE = 100;
 
 type HttpMethod = 'GET' | 'POST' | 'PUT';
 
@@ -71,20 +70,8 @@ export class SpotifyClient {
     return toPlaylistTracks(await this.fetchAllPages<RawPlaylistEntry>(path, PLAYLIST_ITEMS_PAGE_SIZE));
   }
 
-  async getAudioFeatures(trackIds: readonly string[]): Promise<Map<string, AudioFeatures>> {
-    const featuresById = new Map<string, AudioFeatures>();
-    for (const batch of chunk(trackIds, AUDIO_FEATURES_BATCH_SIZE)) {
-      try {
-        const { audio_features } = await this.request<{ audio_features: (AudioFeatures | null)[] }>(
-          `/audio-features?ids=${batch.join(',')}`,
-        );
-        for (const features of audio_features.filter(isDefined)) featuresById.set(features.id, features);
-      } catch (error) {
-        if (isAccessRestricted(error)) return featuresById;
-        throw error;
-      }
-    }
-    return featuresById;
+  async getUser(userId: string): Promise<SpotifyUser> {
+    return toUser(await this.request<RawUser>(`/users/${encodeURIComponent(userId)}`));
   }
 
   async getArtistGenres(artistIds: readonly string[]): Promise<string[][]> {

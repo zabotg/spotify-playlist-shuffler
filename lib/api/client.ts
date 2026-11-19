@@ -1,7 +1,5 @@
 import type { ApiErrorBody } from '@/lib/http/errors';
-import type { PlaylistInsights } from '@/lib/domain/insights';
-import type { EnrichedTrack, PlaylistLink, PlaylistSummary, Track } from '@/lib/domain/playlist';
-import type { ShuffleOptions } from '@/lib/domain/shuffle';
+import type { EnrichedPlaylistTracks, PlaylistLink, PlaylistSummary, Track, TrackDetails } from '@/lib/domain/playlist';
 
 const UNAUTHORIZED = 401;
 
@@ -43,11 +41,7 @@ export const playlistsApi = {
 
   get: (playlistId: string) => request<{ playlist: PlaylistSummary; canEdit: boolean }>(playlistPath(playlistId)),
 
-  shuffle: (playlistId: string, options: ShuffleOptions) =>
-    request<{ tracks: EnrichedTrack[] }>(playlistPath(playlistId, '/shuffle'), { method: 'POST', body: options }),
-
-  insights: (playlistId: string) =>
-    request<{ insights: PlaylistInsights | null }>(playlistPath(playlistId, '/insights')),
+  tracks: (playlistId: string) => request<EnrichedPlaylistTracks>(playlistPath(playlistId, '/tracks')),
 
   recommendations: (playlistId: string, count: number) =>
     request<{ tracks: Track[] }>(playlistPath(playlistId, `/recommendations?count=${count}`)),
@@ -60,4 +54,26 @@ export const playlistsApi = {
 
   create: (name: string, uris: string[]) =>
     request<PlaylistLink>('/api/playlists', { method: 'POST', body: { name, uris } }),
+};
+
+export interface PreviewRequest {
+  trackId: string;
+  isrc: string | null;
+  title: string;
+  artist: string;
+}
+
+export const tracksApi = {
+  details: (isrcs: string[]) =>
+    request<{ details: Record<string, TrackDetails> }>('/api/tracks/details', { method: 'POST', body: { isrcs } }),
+
+  preview: ({ trackId, isrc, title, artist }: PreviewRequest) => {
+    const query = new URLSearchParams({ trackId, title, artist, ...(isrc ? { isrc } : {}) });
+    return request<{ url: string | null }>(`/api/tracks/preview?${query}`);
+  },
+};
+
+export const artistsApi = {
+  genres: (artistIds: string[]) =>
+    request<{ genres: string[][] }>(`/api/artists/genres?ids=${artistIds.map(encodeURIComponent).join(',')}`),
 };

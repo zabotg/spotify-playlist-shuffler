@@ -1,4 +1,4 @@
-import type { PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
+import type { PlaylistItem, PlaylistSummary, PlaylistTracks, SpotifyUser, Track } from '@/lib/domain/playlist';
 import type {
   RawImage,
   RawPlaylist,
@@ -56,9 +56,11 @@ function isReorderableTrack(item: RawPlaylistItem | undefined): item is RawTrack
 }
 
 export function toPlaylistTracks(entries: readonly RawPlaylistEntry[]): PlaylistTracks {
-  const tracks = entries
-    .map((entry) => entry.item ?? entry.track)
-    .filter(isReorderableTrack)
-    .map(toTrack);
-  return { tracks, skippedItemCount: entries.length - tracks.length };
+  const items: PlaylistItem[] = [];
+  for (const entry of entries) {
+    const item = entry.item ?? entry.track;
+    if (!isReorderableTrack(item)) continue;
+    items.push({ track: toTrack(item), addedAt: entry.added_at ?? null, addedById: entry.added_by?.id ?? null });
+  }
+  return { items, skippedItemCount: entries.length - items.length };
 }

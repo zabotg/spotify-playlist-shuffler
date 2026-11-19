@@ -1,32 +1,47 @@
-import { getRelatedArtistTopTracks, getTrackAudioByIsrc } from '@/lib/deezer/client';
-import type { PlaylistInsights } from '@/lib/domain/insights';
+import { findDeezerPreview, getRelatedArtistTopTracks, getTrackDetailsByIsrc, peekTrackDetails } from '@/lib/deezer/client';
 import {
   canEditPlaylist,
   toPlaylistLink,
+  type EnrichedPlaylistTracks,
   type EnrichedTrack,
+  type PlaylistItem,
   type PlaylistLink,
   type PlaylistSummary,
   type Track,
+  type TrackDetails,
 } from '@/lib/domain/playlist';
-import type { ShuffleOptions } from '@/lib/domain/shuffle';
 import { rankArtistsByTrackCount } from '@/lib/engines/artists';
 import { selectNewCandidates } from '@/lib/engines/discovery';
-import { computeInsights } from '@/lib/engines/insights';
-import { applyShuffle } from '@/lib/engines/shuffle';
 import { HttpError } from '@/lib/http/errors';
+import { findItunesPreview } from '@/lib/itunes/client';
+import { getAudioFeatures } from '@/lib/reccobeats/client';
 import type { SpotifyClient } from '@/lib/spotify/client';
 import { isDefined, uniqueBy } from '@/lib/utils/array';
+import { TtlCache } from '@/lib/utils/ttl-cache';
 
 const NEW_PLAYLIST_DESCRIPTION = 'Created with Spotify Playlist Shuffler';
-const GENRE_SAMPLE_ARTIST_LIMIT = 10;
 const DISCOVERY_SEED_ARTIST_LIMIT = 3;
 const DISCOVERY_RELATED_ARTIST_LIMIT = 5;
 const DISCOVERY_TRACKS_PER_ARTIST = 2;
 const DISCOVERY_MAX_TRACKS_PER_ARTIST = 2;
+const USER_NAME_CACHE_TTL_MS = 60 * 60 * 1000;
+const USER_NAME_CACHE_MAX_ENTRIES = 5_000;
+const PREVIEW_CACHE_TTL_MS = 10 * 60 * 1000;
+const PREVIEW_CACHE_MAX_ENTRIES = 5_000;
 
-export interface EnrichedPlaylistTracks {
-  tracks: EnrichedTrack[];
-  skippedItemCount: number;
+const userNames = new TtlCache<string, string | null>(USER_NAME_CACHE_TTL_MS, USER_NAME_CACHE_MAX_ENTRIES);
+const previewUrls = new TtlCache<string, string | null>(PREVIEW_CACHE_TTL_MS, PREVIEW_CACHE_MAX_ENTRIES);
+
+export interface CurrentUser {
+  id: string;
+  displayName?: string;
+}
+
+export interface PreviewLookup {
+  trackId: string;
+  isrc: string | null;
+  title: string;
+  artistName: string;
 }
 
 export async function getEditablePlaylists(client: SpotifyClient, userId: string): Promise<PlaylistSummary[]> {
@@ -34,55 +49,80 @@ export async function getEditablePlaylists(client: SpotifyClient, userId: string
   return playlists.filter((playlist) => canEditPlaylist(playlist, userId));
 }
 
-export async function loadEnrichedTracks(client: SpotifyClient, playlistId: string): Promise<EnrichedPlaylistTracks> {
-  const { tracks, skippedItemCount } = await client.getPlaylistTracks(playlistId);
-  const [featuresById, deezerAudioByIsrc] = await Promise.all([
-    client.getAudioFeatures(tracks.map((track) => track.id)),
-    getTrackAudioByIsrc(tracks.map((track) => track.isrc).filter(isDefined)),
+/** Display names for the people who added tracks. Failures fall back to no name. */
+async function resolveUserNames(
+  client: SpotifyClient,
+  items: readonly PlaylistItem[],
+  currentUser: CurrentUser,
+): Promise<Map<string, string>> {
+  if (currentUser.displayName) userNames.set(currentUser.id, currentUser.displayName);
+  const userIds = [...new Set(items.map((item) => item.addedById).filter(isDefined))];
+
+  await Promise.all(
+    userIds
+      .filter((id) => !userNames.has(id))
+      .map(async (id) => {
+        try {
+          userNames.set(id, (await client.getUser(id)).displayName);
+        } catch {
+          userNames.set(id, null);
+        }
+      }),
+  );
+
+  const names = new Map<string, string>();
+  for (const id of userIds) names.set(id, userNames.get(id) ?? id);
+  return names;
+}
+
+/**
+ * Playlist tracks in their original order, with who added them and their audio features.
+ * Deezer details are only included when they are already cached: the browser loads the rest
+ * in the background with {@link getTrackDetails}, so the page doesn't wait for Deezer's quota.
+ */
+export async function loadEnrichedTracks(
+  client: SpotifyClient,
+  playlistId: string,
+  currentUser: CurrentUser,
+): Promise<EnrichedPlaylistTracks> {
+  const { items, skippedItemCount } = await client.getPlaylistTracks(playlistId);
+  const [featuresById, userNamesById] = await Promise.all([
+    getAudioFeatures(items.map((item) => item.track.id)),
+    resolveUserNames(client, items, currentUser),
   ]);
 
-  const enriched = tracks.map((track): EnrichedTrack => {
+  const tracks = items.map(({ track, addedAt, addedById }): EnrichedTrack => {
     const features = featuresById.get(track.id) ?? null;
-    const deezerAudio = track.isrc ? deezerAudioByIsrc.get(track.isrc) : undefined;
+    const details = track.isrc ? peekTrackDetails(track.isrc) : undefined;
     return {
       track,
+      addedAt,
+      addedBy: addedById ? (userNamesById.get(addedById) ?? null) : null,
       features,
-      bpm: features?.tempo ?? deezerAudio?.bpm ?? null,
-      previewUrl: deezerAudio?.previewUrl ?? null,
+      bpm: features?.tempo ?? details?.bpm ?? null,
+      popularity: details?.popularity ?? null,
     };
   });
-  return { tracks: enriched, skippedItemCount };
+  return { tracks, skippedItemCount };
 }
 
-export async function shufflePlaylist(
-  client: SpotifyClient,
-  playlistId: string,
-  options: ShuffleOptions,
-): Promise<EnrichedTrack[]> {
-  const { tracks } = await loadEnrichedTracks(client, playlistId);
-  if (tracks.length === 0) {
-    throw new HttpError(422, 'EMPTY_PLAYLIST', 'This playlist has no tracks that can be reordered.');
-  }
-  return applyShuffle(tracks, options);
+export async function getTrackDetails(isrcs: readonly string[]): Promise<Record<string, TrackDetails>> {
+  return Object.fromEntries(await getTrackDetailsByIsrc(isrcs));
 }
 
-export async function getPlaylistInsights(
-  client: SpotifyClient,
-  playlistId: string,
-): Promise<PlaylistInsights | null> {
-  const { tracks, skippedItemCount } = await loadEnrichedTracks(client, playlistId);
-  if (tracks.length === 0) return null;
+/** 30 second preview: Deezer first, then the iTunes Search API. */
+export async function findPreviewUrl({ trackId, isrc, title, artistName }: PreviewLookup): Promise<string | null> {
+  const cached = previewUrls.get(trackId);
+  if (cached !== undefined) return cached;
 
-  const sampleArtists = rankArtistsByTrackCount(
-    tracks.map((item) => item.track),
-    GENRE_SAMPLE_ARTIST_LIMIT,
-  );
-  const artistGenres = await client.getArtistGenres(sampleArtists.map((artist) => artist.id));
-  return computeInsights(tracks, skippedItemCount, artistGenres);
+  const url = (await findDeezerPreview(isrc, title, artistName)) ?? (await findItunesPreview(title, artistName));
+  previewUrls.set(trackId, url);
+  return url;
 }
 
 export async function recommendTracks(client: SpotifyClient, playlistId: string, count: number): Promise<Track[]> {
-  const { tracks } = await client.getPlaylistTracks(playlistId);
+  const { items } = await client.getPlaylistTracks(playlistId);
+  const tracks = items.map((item) => item.track);
   const seedArtists = rankArtistsByTrackCount(tracks, DISCOVERY_SEED_ARTIST_LIMIT);
 
   const references = await Promise.all(

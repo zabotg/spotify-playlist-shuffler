@@ -30,6 +30,8 @@ export type RawPlaylistItem = RawTrack | RawEpisode | null;
 export interface RawPlaylistEntry {
   item?: RawPlaylistItem;
   track?: RawPlaylistItem;
+  added_at?: string | null;
+  added_by?: { id?: string | null } | null;
 }
 
 export interface RawPlaylist {

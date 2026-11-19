@@ -39,7 +39,7 @@ export function makeFeatures(overrides: Partial<AudioFeatures> = {}): AudioFeatu
 }
 
 export function enrich(track: Track, extra: Partial<Omit<EnrichedTrack, 'track'>> = {}): EnrichedTrack {
-  return { track, features: null, bpm: null, previewUrl: null, ...extra };
+  return { track, addedAt: null, addedBy: null, features: null, bpm: null, popularity: null, ...extra };
 }
 
 export function byArtist(artistId: string): Track {

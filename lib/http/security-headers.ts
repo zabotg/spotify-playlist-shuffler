@@ -6,7 +6,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://*.scdn.co https://*.spotifycdn.com",
   "connect-src 'self'",
-  'media-src https://*.dzcdn.net',
+  'media-src https://*.dzcdn.net https://*.itunes.apple.com https://*.mzstatic.com',
   "font-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",

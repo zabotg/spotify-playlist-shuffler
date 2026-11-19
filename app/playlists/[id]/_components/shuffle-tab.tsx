@@ -5,6 +5,7 @@ import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { playlistsApi } from '@/lib/api/client';
+import type { EnrichedTrack } from '@/lib/domain/playlist';
 import {
   ARTIST_GAP_LIMITS,
   DEFAULT_ENERGY_PROFILE,
@@ -15,6 +16,7 @@ import {
   type ShuffleMode,
   type ShuffleOptions,
 } from '@/lib/domain/shuffle';
+import { applyShuffle } from '@/lib/engines/shuffle';
 import { useAsyncAction } from '@/lib/hooks/use-async-action';
 import { ENERGY_PROFILE_OPTIONS, MOOD_OPTIONS, SHUFFLE_MODE_DETAILS } from './labels';
 import { SaveDestinationForm, type SaveDestination } from './save-destination';
@@ -105,24 +107,35 @@ function ModeSettings({ settings, onChange }: ModeSettingsProps) {
   return null;
 }
 
+function unavailableReason(mode: ShuffleMode, tracks: readonly EnrichedTrack[]): string | null {
+  if (MODES_REQUIRING_AUDIO_FEATURES.has(mode) && !tracks.some((item) => item.features)) {
+    return 'No audio data found for these tracks';
+  }
+  if (mode === 'bpm_smooth' && !tracks.some((item) => item.bpm)) return 'No BPM data found for these tracks';
+  return null;
+}
+
 interface ShuffleTabProps {
   playlistId: string;
+  tracks: EnrichedTrack[];
   canEdit: boolean;
 }
 
-export function ShuffleTab({ playlistId, canEdit }: ShuffleTabProps) {
+export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
   const [settings, setSettings] = useState<ShuffleSettings>(INITIAL_SETTINGS);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const preview = useAsyncAction(playlistsApi.shuffle);
+  const [shuffled, setShuffled] = useState<EnrichedTrack[] | null>(null);
   const save = useAsyncAction((destination: SaveDestination, uris: string[]) =>
     destination.target === 'current'
       ? playlistsApi.replaceTracks(playlistId, uris)
       : playlistsApi.create(destination.name, uris),
   );
 
-  const previewData = preview.data;
-  const orderedTracks = useMemo(() => sortTracks(previewData?.tracks ?? [], sort), [previewData, sort]);
-  const canPreview = settings.mode !== 'mood_based' || settings.moodSequence.length > 0;
+  const orderedTracks = useMemo(() => sortTracks(shuffled ?? [], sort), [shuffled, sort]);
+  const canPreview =
+    tracks.length > 0 &&
+    !unavailableReason(settings.mode, tracks) &&
+    (settings.mode !== 'mood_based' || settings.moodSequence.length > 0);
 
   function updateSettings(patch: Partial<ShuffleSettings>) {
     setSettings((current) => ({ ...current, ...patch }));
@@ -130,45 +143,44 @@ export function ShuffleTab({ playlistId, canEdit }: ShuffleTabProps) {
 
   function selectMode(mode: ShuffleMode) {
     updateSettings({ mode });
-    preview.reset();
+    setShuffled(null);
     save.reset();
   }
 
   function generatePreview() {
     setSort(DEFAULT_SORT);
     save.reset();
-    void preview.run(playlistId, toShuffleOptions(settings));
+    setShuffled(applyShuffle(tracks, toShuffleOptions(settings)));
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {SHUFFLE_MODES.map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            aria-pressed={settings.mode === mode}
-            onClick={() => selectMode(mode)}
-            className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-              settings.mode === mode ? 'border-spotify bg-spotify/10' : 'border-zinc-700 hover:border-zinc-500'
-            }`}
-          >
-            <div className="text-xs font-semibold">{SHUFFLE_MODE_DETAILS[mode].label}</div>
-            <div className="mt-0.5 text-xs text-zinc-500">{SHUFFLE_MODE_DETAILS[mode].description}</div>
-            {MODES_REQUIRING_AUDIO_FEATURES.has(mode) && (
-              <div className="mt-1 text-[10px] text-zinc-600">Needs Spotify audio features access</div>
-            )}
-          </button>
-        ))}
+        {SHUFFLE_MODES.map((mode) => {
+          const reason = unavailableReason(mode, tracks);
+          return (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={settings.mode === mode}
+              onClick={() => selectMode(mode)}
+              className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                settings.mode === mode ? 'border-spotify bg-spotify/10' : 'border-zinc-700 hover:border-zinc-500'
+              }`}
+            >
+              <div className="text-xs font-semibold">{SHUFFLE_MODE_DETAILS[mode].label}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">{SHUFFLE_MODE_DETAILS[mode].description}</div>
+              {reason && <div className="mt-1 text-[10px] text-zinc-600">{reason}</div>}
+            </button>
+          );
+        })}
       </div>
 
       <ModeSettings settings={settings} onChange={updateSettings} />
 
-      <Button className="self-start" disabled={preview.isLoading || !canPreview} onClick={generatePreview}>
-        {preview.isLoading ? 'Shuffling…' : 'Preview shuffle'}
+      <Button className="self-start" disabled={!canPreview} onClick={generatePreview}>
+        {shuffled ? 'Shuffle again' : 'Preview shuffle'}
       </Button>
-
-      <ErrorAlert message={preview.error} />
 
       {orderedTracks.length > 0 && (
         <div className="flex flex-col gap-4">
