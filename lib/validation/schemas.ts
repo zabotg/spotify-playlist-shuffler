@@ -1,61 +1,31 @@
-/**
- * Zod v4 schemas for all API inputs.
- * Every external input (request body, query params) is validated here.
- */
-
 import { z } from 'zod';
+import { ARTIST_GAP_LIMITS, ENERGY_PROFILES, MOOD_QUADRANTS, SHUFFLE_MODES } from '@/lib/domain/shuffle';
 
-export const ShuffleModeSchema = z.enum([
-  'pure_random',
-  'balanced',
-  'artist_aware',
-  'bpm_smooth',
-  'energy_curve',
-  'mood_based',
-  'popularity_based',
-  'discovery',
-]);
+const MAX_PLAYLIST_TRACKS = 10_000;
+const MAX_PLAYLIST_NAME_LENGTH = 100;
+const DEFAULT_RECOMMENDATION_COUNT = 20;
+const MAX_RECOMMENDATION_COUNT = 50;
 
-export const EnergyProfileSchema = z.enum([
-  'ascending',
-  'descending',
-  'mountain',
-  'valley',
-  'wave',
-]);
+const trackUriSchema = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/, 'Invalid Spotify track URI');
+const trackUrisSchema = z.array(trackUriSchema).min(1).max(MAX_PLAYLIST_TRACKS);
 
-export const PopularityModeSchema = z.enum(['mainstream', 'underground', 'hybrid']);
-
-export const MoodQuadrantSchema = z.enum(['Joyful', 'Intense', 'Melancholic', 'Calm']);
-
-export const ShuffleRequestSchema = z.object({
-  mode: ShuffleModeSchema,
-  preview: z.boolean().default(true),
-  energyProfile: EnergyProfileSchema.optional(),
-  popularityMode: PopularityModeSchema.optional(),
-  moodSequence: z.array(MoodQuadrantSchema).min(1).max(4).optional(),
-  artistMinGap: z.number().int().min(1).max(10).optional(),
+export const shuffleRequestSchema = z.object({
+  mode: z.enum(SHUFFLE_MODES),
+  energyProfile: z.enum(ENERGY_PROFILES).optional(),
+  moodSequence: z.array(z.enum(MOOD_QUADRANTS)).min(1).max(MOOD_QUADRANTS.length).optional(),
+  artistMinGap: z.number().int().min(ARTIST_GAP_LIMITS.min).max(ARTIST_GAP_LIMITS.max).optional(),
 });
 
-export const ApplyRequestSchema = z.object({
-  // Ordered list of Spotify track URIs (spotify:track:xxx)
-  uris: z.array(z.string().startsWith('spotify:track:')).min(1).max(10_000),
-  target: z.enum(['overwrite', 'new']),
-  newName: z.string().min(1).max(100).optional(),
-  playlistId: z.string().min(1).optional(),
+export const trackUrisRequestSchema = z.object({ uris: trackUrisSchema });
+
+export const createPlaylistRequestSchema = z.object({
+  name: z.string().trim().min(1).max(MAX_PLAYLIST_NAME_LENGTH),
+  uris: trackUrisSchema,
 });
 
-export const DiscoverAddSchema = z.object({
-  trackUris: z.array(z.string().startsWith('spotify:track:')).min(1).max(50),
-  target: z.enum(['existing', 'new']),
-  playlistId: z.string().optional(),
-  newName: z.string().min(1).max(100).optional(),
+export const recommendationsQuerySchema = z.object({
+  count: z.coerce.number().int().min(1).max(MAX_RECOMMENDATION_COUNT).default(DEFAULT_RECOMMENDATION_COUNT),
 });
 
-export const DiscoverQuerySchema = z.object({
-  count: z.coerce.number().int().min(1).max(50).default(20),
-});
-
-export type ShuffleRequest = z.infer<typeof ShuffleRequestSchema>;
-export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
-export type DiscoverAddRequest = z.infer<typeof DiscoverAddSchema>;
+export type ShuffleRequest = z.infer<typeof shuffleRequestSchema>;
+export type CreatePlaylistRequest = z.infer<typeof createPlaylistRequestSchema>;

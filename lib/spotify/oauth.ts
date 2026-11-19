@@ -1,103 +1,63 @@
-/**
- * Spotify OAuth token exchange and refresh.
- * All calls happen server-side. Tokens never touch the browser.
- */
+import { getEnv } from '@/lib/config/env';
+import { SpotifyApiError } from '@/lib/spotify/errors';
 
+const SPOTIFY_AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
-export const SPOTIFY_SCOPES = [
+const SPOTIFY_SCOPES = [
   'playlist-read-private',
   'playlist-read-collaborative',
   'playlist-modify-public',
   'playlist-modify-private',
-  'user-read-private',
-  'user-read-email',
-  'user-top-read',
 ].join(' ');
 
-interface TokenResponse {
+export interface TokenResponse {
   access_token: string;
-  refresh_token: string;
-  expires_in: number; // seconds
-  scope: string;
-  token_type: 'Bearer';
-}
-
-interface RefreshResponse {
-  access_token: string;
-  refresh_token?: string; // Spotify may or may not rotate it
+  refresh_token?: string;
   expires_in: number;
-  scope: string;
-  token_type: 'Bearer';
 }
 
-function getClientCredentials(): string {
-  const id = process.env.SPOTIFY_CLIENT_ID;
-  const secret = process.env.SPOTIFY_CLIENT_SECRET;
-  if (!id || !secret) throw new Error('Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET');
-  return Buffer.from(`${id}:${secret}`).toString('base64');
+export function buildAuthorizeUrl(state: string, codeChallenge: string): string {
+  const { SPOTIFY_CLIENT_ID, SPOTIFY_REDIRECT_URI } = getEnv();
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: SPOTIFY_CLIENT_ID,
+    scope: SPOTIFY_SCOPES,
+    redirect_uri: SPOTIFY_REDIRECT_URI,
+    state,
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
+  });
+  return `${SPOTIFY_AUTHORIZE_URL}?${params}`;
 }
 
-/** Exchange authorization code + PKCE verifier for tokens. */
-export async function exchangeCodeForTokens(
-  code: string,
-  codeVerifier: string,
-  redirectUri: string
-): Promise<TokenResponse> {
-  const body = new URLSearchParams({
+export function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenResponse> {
+  return requestToken({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: redirectUri,
+    redirect_uri: getEnv().SPOTIFY_REDIRECT_URI,
     code_verifier: codeVerifier,
   });
+}
 
-  const res = await fetch(SPOTIFY_TOKEN_URL, {
+export function refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
+  return requestToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
+}
+
+async function requestToken(params: Record<string, string>): Promise<TokenResponse> {
+  const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } = getEnv();
+  const credentials = Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64');
+
+  const response = await fetch(SPOTIFY_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${getClientCredentials()}`,
+      Authorization: `Basic ${credentials}`,
     },
-    body,
-    // Never cache token requests
+    body: new URLSearchParams(params),
     cache: 'no-store',
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Token exchange failed: ${res.status} ${err}`);
-  }
-
-  return res.json() as Promise<TokenResponse>;
-}
-
-/** Refresh an expired access token. Returns new tokens. */
-export async function refreshAccessToken(
-  refreshToken: string
-): Promise<RefreshResponse> {
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-  });
-
-  const res = await fetch(SPOTIFY_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${getClientCredentials()}`,
-    },
-    body,
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Token refresh failed: ${res.status} ${err}`);
-  }
-
-  return res.json() as Promise<RefreshResponse>;
-}
-
-/** Millisecond timestamp when the access token expires. */
-export function tokenExpiresAt(expiresIn: number): number {
-  return Date.now() + expiresIn * 1000;
+  if (!response.ok) throw new SpotifyApiError(response.status, await response.text());
+  return response.json() as Promise<TokenResponse>;
 }

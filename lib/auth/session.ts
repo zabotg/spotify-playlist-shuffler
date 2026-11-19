@@ -1,48 +1,35 @@
-/**
- * Session management via iron-session.
- *
- * The entire session (tokens + user info) lives in an encrypted httpOnly cookie.
- * No database. No server-side state. Zero user data persisted.
- *
- * iron-session uses AES-256-CBC + HMAC-SHA-256 (via the password you provide).
- * The cookie is opaque to the browser — JS cannot read it.
- */
-
 import { getIronSession, type IronSession, type SessionOptions } from 'iron-session';
 import { cookies } from 'next/headers';
+import { getEnv } from '@/lib/config/env';
+import { HttpError } from '@/lib/http/errors';
+import type { TokenResponse } from '@/lib/spotify/oauth';
+
+const SESSION_COOKIE_NAME = 'sp_session';
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const TOKEN_REFRESH_MARGIN_MS = 60_000;
 
 export interface SpotifySession {
-  // Spotify tokens — stored encrypted in cookie
   accessToken?: string;
   refreshToken?: string;
-  accessTokenExpiresAt?: number; // Unix ms timestamp
-
-  // User info — cached to avoid extra API calls
-  spotifyUserId?: string;
+  accessTokenExpiresAt?: number;
+  userId?: string;
   displayName?: string;
-  email?: string;
-  country?: string | null;
-
-  // Temporary state during OAuth PKCE flow only.
-  // Cleared after callback succeeds.
   pkceVerifier?: string;
   oauthState?: string;
 }
 
-function getSessionOptions(): SessionOptions {
-  const password = process.env.SESSION_SECRET;
-  if (!password || password.length < 32) {
-    throw new Error('SESSION_SECRET must be at least 32 characters');
-  }
+export type AuthenticatedSession = IronSession<SpotifySession> &
+  Required<Pick<SpotifySession, 'accessToken' | 'refreshToken' | 'userId'>>;
+
+export function getSessionOptions(): SessionOptions {
   return {
-    cookieName: 'sp_session',
-    password,
+    cookieName: SESSION_COOKIE_NAME,
+    password: getEnv().SESSION_SECRET,
     cookieOptions: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      // 7 days — matches Spotify refresh token lifetime
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: SESSION_MAX_AGE_SECONDS,
       path: '/',
     },
   };
@@ -52,24 +39,28 @@ export async function getSession(): Promise<IronSession<SpotifySession>> {
   return getIronSession<SpotifySession>(await cookies(), getSessionOptions());
 }
 
-/** Returns session only if authenticated (has valid tokens). */
-export async function getAuthenticatedSession(): Promise<IronSession<SpotifySession> | null> {
-  const session = await getSession();
-  if (!session.accessToken || !session.spotifyUserId) return null;
-  return session;
+export function isAuthenticated(session: IronSession<SpotifySession>): session is AuthenticatedSession {
+  return Boolean(session.accessToken && session.refreshToken && session.userId);
 }
 
-/** Throws a Response (for use in route handlers) if not authenticated. */
-export async function requireSession(): Promise<IronSession<SpotifySession>> {
+export async function getAuthenticatedSession(): Promise<AuthenticatedSession | null> {
+  const session = await getSession();
+  return isAuthenticated(session) ? session : null;
+}
+
+export async function requireSession(): Promise<AuthenticatedSession> {
   const session = await getAuthenticatedSession();
-  if (!session) {
-    throw Response.json({ error: 'UNAUTHORIZED', message: 'Not authenticated' }, { status: 401 });
-  }
+  if (!session) throw new HttpError(401, 'UNAUTHORIZED', 'Not authenticated.');
   return session;
 }
 
 export function isTokenExpired(session: SpotifySession): boolean {
   if (!session.accessTokenExpiresAt) return true;
-  // Refresh 60s before expiry to avoid edge cases
-  return Date.now() >= session.accessTokenExpiresAt - 60_000;
+  return Date.now() >= session.accessTokenExpiresAt - TOKEN_REFRESH_MARGIN_MS;
+}
+
+export function applyTokens(session: SpotifySession, tokens: TokenResponse): void {
+  session.accessToken = tokens.access_token;
+  session.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
+  if (tokens.refresh_token) session.refreshToken = tokens.refresh_token;
 }

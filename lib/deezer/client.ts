@@ -1,55 +1,89 @@
-/**
- * Deezer public API — no auth required.
- * Used to supplement Spotify data when audio-features is restricted:
- *   - BPM (tempo)
- *   - 30s preview URL
- */
+import pLimit from 'p-limit';
+import { uniqueBy } from '@/lib/utils/array';
 
-const BASE = 'https://api.deezer.com';
+const DEEZER_API_URL = 'https://api.deezer.com';
+const CACHE_TTL_SECONDS = 86_400;
+const MAX_CONCURRENT_REQUESTS = 8;
 
-export interface DeezerTrackData {
+const limit = pLimit(MAX_CONCURRENT_REQUESTS);
+
+interface DeezerList<T> {
+  data: T[];
+}
+
+interface RawDeezerTrack {
+  title: string;
+  bpm?: number;
+  preview?: string;
+  artist: { name: string };
+}
+
+export interface DeezerTrackAudio {
   bpm: number | null;
-  preview: string | null;
+  previewUrl: string | null;
 }
 
-async function getByIsrc(isrc: string): Promise<DeezerTrackData | null> {
-  try {
-    const res = await fetch(`${BASE}/track/isrc:${isrc}`, {
-      next: { revalidate: 86400 }, // cache 24h — BPM/preview never change
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.error) return null;
-    return {
-      bpm: data.bpm > 0 ? data.bpm : null,
-      preview: data.preview || null,
-    };
-  } catch {
-    return null;
-  }
+export interface TrackReference {
+  title: string;
+  artistName: string;
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
+export interface RelatedTracksOptions {
+  relatedArtistLimit: number;
+  tracksPerArtist: number;
 }
 
-/** Lookup BPM + preview for a list of ISRCs. Returns a map keyed by ISRC. */
-export async function getDeezerDataBatch(
-  isrcs: string[]
-): Promise<Map<string, DeezerTrackData>> {
-  const map = new Map<string, DeezerTrackData>();
-  if (isrcs.length === 0) return map;
-
-  // 10 concurrent requests per batch to avoid hammering Deezer
-  for (const batch of chunk(isrcs, 10)) {
-    const results = await Promise.all(
-      batch.map(isrc => getByIsrc(isrc).then(d => ({ isrc, d })))
-    );
-    for (const { isrc, d } of results) {
-      if (d) map.set(isrc, d);
+function deezerGet<T>(path: string): Promise<T | null> {
+  return limit(async () => {
+    try {
+      const response = await fetch(`${DEEZER_API_URL}${path}`, { next: { revalidate: CACHE_TTL_SECONDS } });
+      if (!response.ok) return null;
+      const data = (await response.json()) as T & { error?: unknown };
+      return data.error ? null : data;
+    } catch {
+      return null;
     }
-  }
-  return map;
+  });
+}
+
+export async function getTrackAudioByIsrc(isrcs: readonly string[]): Promise<Map<string, DeezerTrackAudio>> {
+  const uniqueIsrcs = uniqueBy(isrcs, (isrc) => isrc);
+  const tracks = await Promise.all(
+    uniqueIsrcs.map((isrc) => deezerGet<RawDeezerTrack>(`/track/isrc:${encodeURIComponent(isrc)}`)),
+  );
+
+  const audioByIsrc = new Map<string, DeezerTrackAudio>();
+  uniqueIsrcs.forEach((isrc, index) => {
+    const track = tracks[index];
+    if (!track) return;
+    audioByIsrc.set(isrc, {
+      bpm: track.bpm && track.bpm > 0 ? track.bpm : null,
+      previewUrl: track.preview || null,
+    });
+  });
+  return audioByIsrc;
+}
+
+export async function getRelatedArtistTopTracks(
+  artistName: string,
+  { relatedArtistLimit, tracksPerArtist }: RelatedTracksOptions,
+): Promise<TrackReference[]> {
+  const search = await deezerGet<DeezerList<{ id: number }>>(
+    `/search/artist?q=${encodeURIComponent(artistName)}&limit=1`,
+  );
+  const artistId = search?.data[0]?.id;
+  if (!artistId) return [];
+
+  const related = await deezerGet<DeezerList<{ id: number }>>(
+    `/artist/${artistId}/related?limit=${relatedArtistLimit}`,
+  );
+  const topTracks = await Promise.all(
+    (related?.data ?? []).map((artist) =>
+      deezerGet<DeezerList<RawDeezerTrack>>(`/artist/${artist.id}/top?limit=${tracksPerArtist}`),
+    ),
+  );
+
+  return topTracks
+    .flatMap((list) => list?.data ?? [])
+    .map((track) => ({ title: track.title, artistName: track.artist.name }));
 }

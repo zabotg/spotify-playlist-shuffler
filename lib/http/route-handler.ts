@@ -1,0 +1,56 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { ZodError, type ZodType } from 'zod';
+import { SpotifyApiError } from '@/lib/spotify/errors';
+import { HttpError, type ApiErrorBody, type ErrorCode } from './errors';
+
+export interface PlaylistRouteContext {
+  params: Promise<{ id: string }>;
+}
+
+type ErrorMapping = [status: number, code: ErrorCode, message: string];
+
+const SPOTIFY_ERROR_MAPPINGS: Record<number, ErrorMapping> = {
+  401: [401, 'UNAUTHORIZED', 'Your Spotify session expired. Please sign in again.'],
+  403: [403, 'FORBIDDEN', 'Spotify denied access to this resource.'],
+  404: [404, 'NOT_FOUND', 'Resource not found on Spotify.'],
+  429: [429, 'RATE_LIMITED', 'Spotify rate limit reached. Try again in a moment.'],
+};
+const DEFAULT_SPOTIFY_ERROR: ErrorMapping = [502, 'SPOTIFY_ERROR', 'Spotify request failed.'];
+
+function errorResponse([status, code, message]: ErrorMapping): NextResponse<ApiErrorBody> {
+  return NextResponse.json({ error: code, message }, { status });
+}
+
+export function toErrorResponse(error: unknown): NextResponse<ApiErrorBody> {
+  if (error instanceof HttpError) return errorResponse([error.status, error.code, error.message]);
+  if (error instanceof ZodError) {
+    return errorResponse([400, 'VALIDATION_ERROR', error.issues.map((issue) => issue.message).join('; ')]);
+  }
+  if (error instanceof SyntaxError) return errorResponse([400, 'VALIDATION_ERROR', 'Invalid JSON body.']);
+  if (error instanceof SpotifyApiError) {
+    return errorResponse(SPOTIFY_ERROR_MAPPINGS[error.status] ?? DEFAULT_SPOTIFY_ERROR);
+  }
+
+  console.error('[api] Unexpected error', error);
+  return errorResponse([500, 'INTERNAL_ERROR', 'Unexpected server error.']);
+}
+
+export function withErrorHandling<Context>(
+  handler: (request: NextRequest, context: Context) => Promise<Response>,
+) {
+  return async (request: NextRequest, context: Context): Promise<Response> => {
+    try {
+      return await handler(request, context);
+    } catch (error) {
+      return toErrorResponse(error);
+    }
+  };
+}
+
+export async function parseJsonBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
+  return schema.parse(await request.json());
+}
+
+export function parseSearchParams<T>(request: NextRequest, schema: ZodType<T>): T {
+  return schema.parse(Object.fromEntries(request.nextUrl.searchParams));
+}
