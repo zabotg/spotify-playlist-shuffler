@@ -4,6 +4,31 @@ import { shuffleArray, type RandomSource } from '@/lib/utils/random';
 import { scoreTransition } from './flow';
 import { profileDistance, type SoundProfile } from './similarity';
 
+/** Artist names compared loosely: case, accents and punctuation ignored, letters of any script kept. */
+function artistKey(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+/** Whether one of the track's artists has this name. Used to reject wrong search matches. */
+export function hasArtistNamed(track: Track, artistName: string): boolean {
+  const wanted = artistKey(artistName);
+  return track.artists.some((artist) => artistKey(artist.name) === wanted);
+}
+
+/**
+ * Keeps tracks by at least one of the given artists. ReccoBeats suggests songs by sound alone
+ * (a reggaeton song can have the same tempo and energy as a metal one), so its suggestions only
+ * get through when they come from an artist already in the playlist or related to one on Deezer.
+ */
+export function keepTracksByArtists(tracks: readonly Track[], artistNames: readonly string[]): Track[] {
+  const allowed = new Set(artistNames.map(artistKey));
+  return tracks.filter((track) => track.artists.some((artist) => allowed.has(artistKey(artist.name))));
+}
+
 export interface CandidateSelection {
   existingTrackIds: ReadonlySet<string>;
   maxPerArtist: number;

@@ -75,6 +75,7 @@ function PlaylistHeader({ playlist, tracks, progress, analysisProgress }: Playli
         src={playlist.imageUrl}
         alt=""
         sizes="208px"
+        loading="eager"
         className={`${COVER_CLASSES} rounded-lg shadow-2xl shadow-black/50`}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -277,7 +278,12 @@ export function PlaylistView({ playlistId }: { playlistId: string }) {
 
                 {tracks && activeTab === 'tracks' && <TracksTab tracks={tracks} />}
                 {tracks && activeTab === 'shuffle' && (
-                  <ShuffleTab playlistId={playlistId} tracks={tracks} canEdit={playlistData.canEdit} />
+                  <ShuffleTab
+                    playlistId={playlistId}
+                    tracks={tracks}
+                    canEdit={playlistData.canEdit}
+                    onChanged={() => runTracks(playlistId)}
+                  />
                 )}
                 {tracks && activeTab === 'improve' && (
                   <ImproveTab
@@ -285,7 +291,7 @@ export function PlaylistView({ playlistId }: { playlistId: string }) {
                     playlistName={playlistData.playlist.name}
                     tracks={tracks}
                     canEdit={playlistData.canEdit}
-                    onChanged={() => void runTracks(playlistId)}
+                    onChanged={() => runTracks(playlistId)}
                   />
                 )}
                 {tracks && activeTab === 'insights' && (

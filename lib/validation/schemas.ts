@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OVERWRITE_METHODS } from '@/lib/domain/models/playlist';
 
 const MAX_PLAYLIST_TRACKS = 10_000;
 const MAX_PLAYLIST_NAME_LENGTH = 100;
@@ -24,6 +25,11 @@ export const trackUrisRequestSchema = z.object({
   uris: trackUrisSchema,
   /** Where to insert the tracks; omitted means at the end. */
   position: z.number().int().min(0).max(MAX_PLAYLIST_TRACKS).optional(),
+});
+
+export const overwriteTracksRequestSchema = z.object({
+  uris: trackUrisSchema,
+  method: z.enum(OVERWRITE_METHODS).default('move'),
 });
 
 export const removeTracksRequestSchema = z.object({

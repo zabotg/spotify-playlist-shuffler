@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/auth/session', () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
+const requestHost = vi.hoisted(() => ({ value: '127.0.0.1:3000' }));
+vi.mock('next/headers', () => ({ headers: async () => new Headers({ host: requestHost.value }) }));
 vi.mock('next/font/google', () => {
   const font = () => ({ variable: 'font-variable', className: 'font-class' });
   return { Geist: font, Geist_Mono: font, Bricolage_Grotesque: font };
@@ -20,6 +22,17 @@ vi.mock('next/font/google', () => {
 vi.mock('@/lib/api/playlists-api', () => ({ playlistsApi: { list: vi.fn().mockResolvedValue({ playlists: [] }), get: vi.fn(() => new Promise(() => {})), tracks: vi.fn(() => new Promise(() => {})) } }));
 
 describe('server pages', () => {
+  it('home page moves visits on another host (like localhost) to the configured one', async () => {
+    requestHost.value = 'localhost:3000';
+    const { default: HomePage } = await import('@/app/page');
+    await expect(HomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow('redirect:http://127.0.0.1:3000/');
+    await expect(HomePage({ searchParams: Promise.resolve({ error: 'access_denied' }) })).rejects.toThrow(
+      'redirect:http://127.0.0.1:3000/?error=access_denied',
+    );
+    expect(mocks.getAuthenticatedSession).not.toHaveBeenCalled();
+    requestHost.value = '127.0.0.1:3000';
+  });
+
   it('home page sends signed-in users to the dashboard', async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(fakeSession());
     const { default: HomePage } = await import('@/app/page');

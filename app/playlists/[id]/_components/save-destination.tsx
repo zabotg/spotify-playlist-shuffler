@@ -23,6 +23,8 @@ interface SaveDestinationFormProps {
   title?: string;
   /** Extra notes shown under the save button. */
   children?: ReactNode;
+  /** Extra choices shown only while saving over the current playlist is selected. */
+  currentOptions?: ReactNode;
 }
 
 export function SaveDestinationForm({
@@ -34,6 +36,7 @@ export function SaveDestinationForm({
   onSave,
   title = 'Save to Spotify',
   children,
+  currentOptions,
 }: SaveDestinationFormProps) {
   const [target, setTarget] = useState<SaveTarget>(canSaveToCurrent ? 'current' : 'new');
   const [name, setName] = useState('');
@@ -60,6 +63,7 @@ export function SaveDestinationForm({
       </h3>
 
       <ChipGroup options={options} value={target} onChange={setTarget} ariaLabel="Where to save" />
+      {target === 'current' && currentOptions}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         {target === 'new' && (

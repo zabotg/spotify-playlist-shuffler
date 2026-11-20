@@ -1,10 +1,12 @@
 import type {
   EnrichedPlaylistTracks,
   EnrichedTrack,
+  OverwriteMethod,
   PlaylistLink,
   PlaylistSummary,
+  SaveProgress,
 } from '@/lib/domain/models/playlist';
-import { apiRequest } from './request';
+import { apiRequest, progressRequest } from './request';
 
 const playlistPath = (playlistId: string, suffix = '') => `/api/playlists/${encodeURIComponent(playlistId)}${suffix}`;
 
@@ -24,8 +26,18 @@ export const playlistsApi = {
     return apiRequest<{ tracks: EnrichedTrack[] }>(playlistPath(playlistId, `/bridge?${query}`));
   },
 
-  replaceTracks: (playlistId: string, uris: string[]) =>
-    apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'PUT', body: { uris } }),
+  /** Saves a new order over the playlist, reporting progress while it runs (it can take minutes). */
+  overwriteTracks: (
+    playlistId: string,
+    uris: string[],
+    method: OverwriteMethod,
+    onProgress: (progress: SaveProgress) => void,
+  ) =>
+    progressRequest<PlaylistLink>(
+      playlistPath(playlistId, '/tracks'),
+      { method: 'PUT', body: { uris, method } },
+      onProgress,
+    ),
 
   addTracks: (playlistId: string, uris: string[], position?: number) =>
     apiRequest<PlaylistLink>(playlistPath(playlistId, '/tracks'), { method: 'POST', body: { uris, position } }),

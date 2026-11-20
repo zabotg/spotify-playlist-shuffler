@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { average, chunk, countBy, groupBy, isDefined, range, sum, topEntries, uniqueBy } from '@/lib/utils/array';
+import { average, chunk, countBy, groupBy, interleave, isDefined, range, sum, topEntries, uniqueBy } from '@/lib/utils/array';
 
 describe('array utils', () => {
   it('chunks items into fixed-size groups', () => {
@@ -28,6 +28,8 @@ describe('array utils', () => {
 
   it('keeps the first occurrence of each key', () => {
     expect(uniqueBy(['a', 'A', 'b'], (value) => value.toLowerCase())).toEqual(['a', 'b']);
+    expect(interleave(['a1', 'a2', 'a3'], ['b1'])).toEqual(['a1', 'b1', 'a2', 'a3']);
+    expect(interleave(['a1'], ['b1', 'b2'])).toEqual(['a1', 'b1', 'b2']);
   });
 
   it('returns the most frequent entries first', () => {

@@ -17,9 +17,9 @@ import {
 import { useId, useMemo, useState } from 'react';
 import { ErrorAlert, SpotifyLinkAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Chip, ChipGroup } from '@/components/ui/chip';
+import { Chip, ChipGroup, type ChipOption } from '@/components/ui/chip';
 import { playlistsApi } from '@/lib/api/playlists-api';
-import type { EnrichedTrack } from '@/lib/domain/models/playlist';
+import type { EnrichedTrack, OverwriteMethod, SaveProgress } from '@/lib/domain/models/playlist';
 import {
   ARTIST_GAP_LIMITS,
   DEFAULT_ENERGY_PROFILE,
@@ -37,6 +37,44 @@ import { SaveDestinationForm, type SaveDestination } from './save-destination';
 import { DEFAULT_SORT, sortTracks, TrackTable, type TrackSort } from './track-table/track-table';
 
 const DEFAULT_NEW_PLAYLIST_NAME = 'Shuffled Playlist';
+
+const OVERWRITE_METHOD_OPTIONS: ChipOption<OverwriteMethod>[] = [
+  { value: 'move', label: 'Keep "Date added"' },
+  { value: 'replace', label: 'Replace all at once' },
+];
+
+const OVERWRITE_METHOD_NOTES: Record<OverwriteMethod, string> = {
+  move: 'Moves each track into its new place, so "Date added" is kept. Spotify takes one request per track, so big playlists can take a few minutes.',
+  replace: 'Replaces the whole list in batches of 100, so it takes seconds even for big playlists. Every track\'s "Date added" resets to now.',
+};
+
+/** Live progress of a save: a bar with how many steps are done. */
+function SaveProgressBar({ method, progress }: { method: OverwriteMethod; progress: SaveProgress }) {
+  const percent = progress.total === 0 ? 100 : Math.round((progress.done / progress.total) * 100);
+  const label =
+    method === 'move'
+      ? `Moving tracks… ${progress.done} of ${progress.total}`
+      : `Saving… batch ${progress.done} of ${progress.total}`;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-zinc-200">{label}</span>
+        <span className="text-zinc-400 tabular-nums">{percent}%</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Saving to Spotify"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-2 overflow-hidden rounded-full bg-zinc-800"
+      >
+        <div className="h-full rounded-full bg-spotify transition-[width] duration-300" style={{ width: `${percent}%` }} />
+      </div>
+      <p className="text-xs text-zinc-500">Keep this tab open until it finishes.</p>
+    </div>
+  );
+}
 
 const MODE_ICONS: Record<ShuffleMode, LucideIcon> = {
   pure_random: Dices,
@@ -229,17 +267,28 @@ interface ShuffleTabProps {
   playlistId: string;
   tracks: EnrichedTrack[];
   canEdit: boolean;
+  /** Reloads the playlist after its order was overwritten. */
+  onChanged: () => Promise<unknown>;
 }
 
-export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
+export function ShuffleTab({ playlistId, tracks, canEdit, onChanged }: ShuffleTabProps) {
   const [settings, setSettings] = useState<ShuffleSettings>(INITIAL_SETTINGS);
   const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
   const [shuffled, setShuffled] = useState<EnrichedTrack[] | null>(null);
+  const [overwriteMethod, setOverwriteMethod] = useState<OverwriteMethod>('move');
+  const [progress, setProgress] = useState<SaveProgress | null>(null);
   const save = useAsyncAction((destination: SaveDestination, uris: string[]) =>
     destination.target === 'current'
-      ? playlistsApi.replaceTracks(playlistId, uris)
+      ? playlistsApi.overwriteTracks(playlistId, uris, overwriteMethod, setProgress)
       : playlistsApi.create(destination.name, uris),
   );
+
+  async function saveOrder(destination: SaveDestination, uris: string[]) {
+    setProgress(null);
+    const saved = await save.run(destination, uris);
+    // The Tracks tab and the other tabs should show the order that is now in Spotify.
+    if (saved && destination.target === 'current') await onChanged();
+  }
   const id = useId();
 
   const orderedTracks = useMemo(() => sortTracks(shuffled ?? [], sort), [shuffled, sort]);
@@ -339,17 +388,23 @@ export function ShuffleTab({ playlistId, tracks, canEdit }: ShuffleTabProps) {
             defaultName={DEFAULT_NEW_PLAYLIST_NAME}
             submitLabel="Save order"
             isSaving={save.isLoading}
-            onSave={(destination) => void save.run(destination, orderedTracks.map((item) => item.track.uri))}
+            onSave={(destination) => void saveOrder(destination, orderedTracks.map((item) => item.track.uri))}
+            currentOptions={
+              <div className="flex flex-col gap-2">
+                <ChipGroup
+                  options={OVERWRITE_METHOD_OPTIONS}
+                  value={overwriteMethod}
+                  onChange={setOverwriteMethod}
+                  ariaLabel="How to overwrite"
+                />
+                <p className="flex items-start gap-2 text-sm leading-relaxed text-zinc-400">
+                  <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{OVERWRITE_METHOD_NOTES[overwriteMethod]}</span>
+                </p>
+              </div>
+            }
           >
-            {canEdit && (
-              <p className="flex items-start gap-2 text-sm leading-relaxed text-zinc-400">
-                <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  Overwriting moves each track into its new place, so &quot;Date added&quot; is kept. Big playlists can
-                  take a minute.
-                </span>
-              </p>
-            )}
+            {save.isLoading && progress && <SaveProgressBar method={overwriteMethod} progress={progress} />}
           </SaveDestinationForm>
 
           <ErrorAlert message={save.error} />

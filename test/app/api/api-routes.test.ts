@@ -7,7 +7,7 @@ const services = vi.hoisted(() => ({
   getEditablePlaylists: vi.fn(),
   createPlaylistWithTracks: vi.fn(),
   loadEnrichedTracks: vi.fn(),
-  replacePlaylistOrder: vi.fn(),
+  planPlaylistOverwrite: vi.fn(),
   addTracks: vi.fn(),
   recommendTracks: vi.fn(),
   getTrackDetails: vi.fn(),
@@ -89,10 +89,43 @@ describe('API routes', () => {
     expect(services.loadEnrichedTracks).toHaveBeenCalledWith(client, 'p1', { id: 'me', displayName: 'Me' });
   });
 
-  it('PUT and POST /api/playlists/:id/tracks replace or add tracks', async () => {
-    await replaceTracks(send('/api/playlists/p1/tracks', 'PUT', { uris }), params());
+  it('PUT /api/playlists/:id/tracks streams the overwrite progress, moving by default', async () => {
+    const link = { playlistId: 'p1', playlistUrl: 'https://open.spotify.com/playlist/p1' };
+    services.planPlaylistOverwrite.mockResolvedValue({
+      total: 2,
+      run: async (onProgress: (done: number) => void) => {
+        onProgress(1);
+        onProgress(2);
+        return link;
+      },
+    });
+
+    const response = await replaceTracks(send('/api/playlists/p1/tracks', 'PUT', { uris }), params());
+
+    expect(response.headers.get('content-type')).toContain('application/x-ndjson');
+    const events = (await response.text()).trim().split('\n').map((line) => JSON.parse(line));
+    expect(events).toEqual([
+      { type: 'progress', done: 0, total: 2 },
+      { type: 'progress', done: 1, total: 2 },
+      { type: 'progress', done: 2, total: 2 },
+      { type: 'done', result: link },
+    ]);
+    expect(services.planPlaylistOverwrite).toHaveBeenCalledWith(client, 'p1', uris, 'move');
+
+    await replaceTracks(send('/api/playlists/p1/tracks', 'PUT', { uris, method: 'replace' }), params());
+    expect(services.planPlaylistOverwrite).toHaveBeenLastCalledWith(client, 'p1', uris, 'replace');
+  });
+
+  it('PUT /api/playlists/:id/tracks answers a normal error when the save is refused up front', async () => {
+    const { HttpError } = await import('@/lib/http/errors');
+    services.planPlaylistOverwrite.mockRejectedValue(new HttpError(409, 'CONFLICT', 'The playlist changed.'));
+    const response = await replaceTracks(send('/api/playlists/p1/tracks', 'PUT', { uris }), params());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'CONFLICT', message: 'The playlist changed.' });
+  });
+
+  it('POST /api/playlists/:id/tracks adds tracks', async () => {
     await addPlaylistTracks(send('/api/playlists/p1/tracks', 'POST', { uris }), params());
-    expect(services.replacePlaylistOrder).toHaveBeenCalledWith(client, 'p1', uris);
     expect(services.addTracks).toHaveBeenCalledWith(client, 'p1', uris, undefined);
   });
 

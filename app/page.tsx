@@ -1,10 +1,12 @@
 import { ChartColumn, Compass, Lock, Shuffle, type LucideIcon } from 'lucide-react';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SpotifyIcon } from '@/components/spotify-icon';
 import { Alert } from '@/components/ui/alert';
 import { BrandMark } from '@/components/ui/brand-mark';
 import { getLoginErrorMessage } from '@/lib/auth/login-errors';
 import { getAuthenticatedSession } from '@/lib/auth/session';
+import { appUrl, isOtherLocalHost } from '@/lib/config/app-origin';
 
 interface HomePageProps {
   searchParams: Promise<{ error?: string }>;
@@ -62,9 +64,14 @@ function ShufflePreview() {
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
+  const { error } = await searchParams;
+  // Signed-out visits to protected pages land here, so this covers every page opened on localhost.
+  if (isOtherLocalHost((await headers()).get('host'))) {
+    redirect(appUrl(error ? `/?${new URLSearchParams({ error })}` : '/').href);
+  }
   if (await getAuthenticatedSession()) redirect('/dashboard');
 
-  const errorMessage = getLoginErrorMessage((await searchParams).error);
+  const errorMessage = getLoginErrorMessage(error);
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">

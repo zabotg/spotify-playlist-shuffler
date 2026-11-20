@@ -29,6 +29,26 @@ function Harness({ tracks = [slow, fast, unknown], ...props }: { tracks?: Enrich
 const titles = () => screen.getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell')[2]?.textContent);
 
 describe('TrackTable', () => {
+  it('ignores a resize notification that arrives after the table is gone', () => {
+    // Removing the table resizes it, and the browser can report that after React cleared the ref.
+    let notify: () => void = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const { unmount } = render(<Harness />);
+    notify();
+    unmount();
+    expect(() => notify()).not.toThrow();
+    vi.unstubAllGlobals();
+  });
+
   it('starts on the Spotify-like overview and switches to the audio columns', async () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Album' })).toBeInTheDocument();

@@ -102,6 +102,17 @@ export class SpotifyClient {
     }
   }
 
+  /**
+   * Replaces every item with these tracks, in order: the first 100 replace the list, the rest
+   * are appended in batches. Every track gets a new "date added". `onBatch` runs after each batch.
+   */
+  async replaceItems(playlistId: string, uris: readonly string[], onBatch: () => void = () => {}): Promise<void> {
+    for (const [index, batch] of chunk(uris, WRITE_BATCH_SIZE).entries()) {
+      await this.request(playlistItemsPath(playlistId), { method: index === 0 ? 'PUT' : 'POST', json: { uris: batch } });
+      onBatch();
+    }
+  }
+
   /** Removes every copy of the given tracks. */
   async removeTracks(playlistId: string, uris: readonly string[]): Promise<void> {
     for (const batch of chunk(uris, WRITE_BATCH_SIZE)) {

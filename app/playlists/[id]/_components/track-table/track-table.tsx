@@ -45,9 +45,11 @@ function useHorizontalOverflow() {
   const ref = useRef<HTMLDivElement>(null);
   const [hasMoreRight, setHasMoreRight] = useState(false);
 
-  // The scroll container is always rendered, so the ref is set whenever these run.
   const update = useCallback(() => {
-    const element = ref.current as HTMLDivElement;
+    // On unmount React clears the ref before the effect cleanup disconnects the observer, and
+    // removing the element resizes it, so the observer can still fire once with no element.
+    const element = ref.current;
+    if (!element) return;
     setHasMoreRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
   }, []);
 

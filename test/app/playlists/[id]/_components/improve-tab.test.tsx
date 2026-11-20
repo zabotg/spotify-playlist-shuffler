@@ -19,8 +19,7 @@ const tracks = [
   enrich({ ...song, id: 'copy', uri: 'spotify:track:copy' }, { bpm: 120, features: makeFeatures({ energy: 0.5, valence: 0.8 }) }),
 ];
 
-function renderTab(canEdit = true) {
-  const onChanged = vi.fn();
+function renderTab(canEdit = true, onChanged = vi.fn().mockResolvedValue(undefined)) {
   render(<ImproveTab playlistId="p1" playlistName="Mix" tracks={tracks} canEdit={canEdit} onChanged={onChanged} />);
   return { onChanged };
 }
@@ -53,11 +52,13 @@ describe('ImproveTab', () => {
     expect(api.removeTracks).toHaveBeenCalledWith('p1', [2]);
   });
 
-  it('finds bridge songs and inserts the chosen one between the two tracks', async () => {
+  it('finds bridge songs, inserts the chosen one and waits for the reload', async () => {
     const bridge = enrich(byArtist('bridge'), { bpm: 140, features: makeFeatures() });
     api.bridge.mockResolvedValue({ tracks: [bridge] });
     api.addTracks.mockResolvedValue({ playlistId: 'p1', playlistUrl: 'x' });
-    const { onChanged } = renderTab();
+    let finishReload: () => void = () => {};
+    const onChanged = vi.fn(() => new Promise<void>((resolve) => (finishReload = resolve)));
+    renderTab(true, onChanged);
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Find bridge songs' })[0]);
     await userEvent.click(await screen.findByRole('checkbox', { name: `Select ${bridge.track.name}` }));
@@ -65,6 +66,33 @@ describe('ImproveTab', () => {
 
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(api.addTracks).toHaveBeenCalledWith('p1', [bridge.track.uri], expect.any(Number));
+    expect(screen.getByRole('status')).toHaveTextContent('Added 1 song between them. Updating the flow…');
+    expect(screen.queryByRole('button', { name: /Insert .* between them/ })).not.toBeInTheDocument();
+
+    // The reload failed, so the pair is still there: the card comes back with nothing selected.
+    finishReload();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Insert 0 songs between them' })).toBeDisabled();
+  });
+
+  it('does not show old suggestions on a new pair after the playlist reloads', async () => {
+    const bridge = enrich(byArtist('bridge'), { bpm: 140, features: makeFeatures({ tempo: 140, energy: 0.7, key: 3, mode: 1 }) });
+    api.bridge.mockResolvedValue({ tracks: [bridge] });
+    api.addTracks.mockResolvedValue({ playlistId: 'p1', playlistUrl: 'x' });
+    // Still reloading when the new tracks arrive.
+    const onChanged = vi.fn(() => new Promise<void>(() => {}));
+    const props = { playlistId: 'p1', playlistName: 'Mix', canEdit: true, onChanged };
+    const { rerender } = render(<ImproveTab {...props} tracks={tracks} />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Find bridge songs' })[0]);
+    await userEvent.click(await screen.findByRole('checkbox', { name: `Select ${bridge.track.name}` }));
+    await userEvent.click(screen.getByRole('button', { name: 'Insert 1 song between them' }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+
+    rerender(<ImproveTab {...props} tracks={[tracks[0], bridge, ...tracks.slice(1)]} />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: `Select ${bridge.track.name}` })).not.toBeInTheDocument();
   });
 
   it('saves a mood group as a new playlist', async () => {

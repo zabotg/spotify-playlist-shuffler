@@ -3,6 +3,8 @@ import { getRecommendations } from '@/lib/clients/reccobeats/client';
 import type { SpotifyClient } from '@/lib/clients/spotify/client';
 import { rankArtistsByTrackCount } from '@/lib/domain/engines/artists';
 import {
+  hasArtistNamed,
+  keepTracksByArtists,
   pickRepresentativeTracks,
   rankBridgeCandidates,
   rankCandidates,
@@ -10,7 +12,7 @@ import {
 } from '@/lib/domain/engines/discovery';
 import { buildSoundProfile } from '@/lib/domain/engines/similarity';
 import type { EnrichedTrack, Track } from '@/lib/domain/models/playlist';
-import { isDefined, uniqueBy } from '@/lib/utils/array';
+import { interleave, isDefined, uniqueBy } from '@/lib/utils/array';
 import type { RandomSource } from '@/lib/utils/random';
 import { getAudioFeatures } from './track-data-service';
 
@@ -22,6 +24,8 @@ const SEED_TRACK_COUNT = 5;
 const SIMILAR_PER_SEED = 10;
 const BRIDGE_SUGGESTIONS = 3;
 const BRIDGE_PER_SEED = 10;
+/** The bridge only has the two tracks' artists to start from, so it looks a bit wider. */
+const BRIDGE_RELATED_ARTIST_LIMIT = 8;
 /** Candidates scored before keeping the best few. */
 const BRIDGE_CANDIDATE_LIMIT = 30;
 
@@ -46,26 +50,47 @@ async function similarTracks(client: SpotifyClient, seeds: readonly Track[]): Pr
   return loadTracks(client, [...new Set(idLists.flatMap((ids) => ids ?? []))]);
 }
 
-/** Top tracks of artists related to the playlist's main artists (Deezer), matched on Spotify. */
-async function relatedArtistTracks(client: SpotifyClient, tracks: readonly Track[]): Promise<Track[]> {
+interface RelatedArtists {
+  /** Their top tracks, matched on Spotify. */
+  tracks: Track[];
+  /** Every related artist found, matched or not. */
+  artistNames: string[];
+}
+
+/** Artists related to the main artists of these tracks (Deezer) and their top tracks. */
+async function findRelatedArtists(
+  client: SpotifyClient,
+  tracks: readonly Track[],
+  relatedArtistLimit = RELATED_ARTIST_LIMIT,
+): Promise<RelatedArtists> {
   const seedArtists = rankArtistsByTrackCount(tracks, SEED_ARTIST_LIMIT);
   const references = await Promise.all(
     seedArtists.map((artist) =>
-      getRelatedArtistTopTracks(artist.name, {
-        relatedArtistLimit: RELATED_ARTIST_LIMIT,
-        tracksPerArtist: TRACKS_PER_RELATED_ARTIST,
-      }),
+      getRelatedArtistTopTracks(artist.name, { relatedArtistLimit, tracksPerArtist: TRACKS_PER_RELATED_ARTIST }),
     ),
   );
   const uniqueReferences = uniqueBy(references.flat(), (ref) => `${ref.title}|${ref.artistName}`.toLowerCase());
-  const matches = await Promise.all(uniqueReferences.map((ref) => client.searchTrack(ref.title, ref.artistName)));
-  return matches.filter(isDefined);
+  const matches = await Promise.all(
+    uniqueReferences.map(async (ref) => {
+      // Spotify search returns its best guess even when the song isn't there, often by someone else.
+      // One failed search (e.g. rate limited) only loses that song, not the whole suggestion list.
+      const match = await client.searchTrack(ref.title, ref.artistName).catch(() => null);
+      return match && hasArtistNamed(match, ref.artistName) ? match : null;
+    }),
+  );
+  return { tracks: matches.filter(isDefined), artistNames: uniqueReferences.map((ref) => ref.artistName) };
+}
+
+/** Artists whose songs fit the playlist's genre: the ones in it and the ones related to them. */
+function genreArtistNames(playlistTracks: readonly Track[], related: RelatedArtists): string[] {
+  return [...playlistTracks.flatMap((track) => track.artists.map((artist) => artist.name)), ...related.artistNames];
 }
 
 /**
  * New songs for a playlist. Candidates come from artists related to its main artists (Deezer)
- * and from tracks that sound like its most typical songs (ReccoBeats). They are then ranked by
- * how close they are to the playlist's sound, and tracks it already has are left out.
+ * and from tracks that sound like its most typical songs (ReccoBeats), keeping only the latter
+ * by artists in the playlist's genre. They are then ranked by how close they are to the
+ * playlist's sound, and tracks it already has are left out.
  */
 export async function recommendTracks(
   client: SpotifyClient,
@@ -81,11 +106,14 @@ export async function recommendTracks(
   const profile = buildSoundProfile([...playlistFeatures.values()]);
   const seeds = pickRepresentativeTracks(tracks, playlistFeatures, profile, SEED_TRACK_COUNT, random);
 
-  const [related, similar] = await Promise.all([relatedArtistTracks(client, tracks), similarTracks(client, seeds)]);
+  const [related, similar] = await Promise.all([findRelatedArtists(client, tracks), similarTracks(client, seeds)]);
   const pool = uniqueBy(
     [
-      ...related.map((track) => ({ track, fromRelatedArtist: true })),
-      ...similar.map((track) => ({ track, fromRelatedArtist: false })),
+      ...related.tracks.map((track) => ({ track, fromRelatedArtist: true })),
+      ...keepTracksByArtists(similar, genreArtistNames(tracks, related)).map((track) => ({
+        track,
+        fromRelatedArtist: false,
+      })),
     ],
     (candidate) => candidate.track.id,
   ).filter((candidate) => !existingTrackIds.has(candidate.track.id));
@@ -105,9 +133,9 @@ export async function recommendTracks(
 
 /**
  * About 3 songs to place between two tracks to smooth a rough transition. Candidates come from
- * ReccoBeats (seeded with both tracks and with each one, since it may not know one of them)
- * and from artists related to both tracks' artists, so there are options even when ReccoBeats
- * knows neither. They are ranked by how well they lead from the first track into the second.
+ * artists related to both tracks' artists (Deezer), then from ReccoBeats (seeded with both
+ * tracks and with each one, since it may not know one of them) when they are by an artist in
+ * the playlist's genre. They are ranked by how well they lead from the first track into the second.
  */
 export async function suggestBridgeTracks(
   client: SpotifyClient,
@@ -123,12 +151,14 @@ export async function suggestBridgeTracks(
     Promise.all(
       [[fromTrackId, toTrackId], [fromTrackId], [toTrackId]].map((seeds) => getRecommendations(seeds, BRIDGE_PER_SEED)),
     ),
-    relatedArtistTracks(client, ends),
+    findRelatedArtists(client, ends, BRIDGE_RELATED_ARTIST_LIMIT),
   ]);
   const similar = await loadTracks(client, [...new Set(idLists.flatMap((ids) => ids ?? []))]);
+  const similarInGenre = keepTracksByArtists(similar, genreArtistNames(playlistTracks, related));
 
   const existingTrackIds = new Set(playlistTracks.map((track) => track.id));
-  const candidates = selectNewCandidates([...similar, ...related], {
+  // Both sources get a fair share of the candidate limit before ranking picks the best.
+  const candidates = selectNewCandidates(interleave(related.tracks, similarInGenre), {
     existingTrackIds,
     maxPerArtist: 1,
     limit: BRIDGE_CANDIDATE_LIMIT,

@@ -13,7 +13,7 @@ import { byArtist, enrich, makeFeatures } from '@/test/factories';
 
 vi.mock('@/lib/api/playlists-api', () => ({ playlistsApi: { list: vi.fn().mockResolvedValue({ playlists: [] }) } }));
 vi.mock('@/lib/api/tracks-api', () => ({ tracksApi: {} }));
-vi.mock('next/headers', () => ({ cookies: vi.fn() }));
+vi.mock('next/headers', () => ({ cookies: vi.fn(), headers: async () => new Headers({ host: '127.0.0.1:3000' }) }));
 vi.mock('@/lib/auth/session', () => ({ getAuthenticatedSession: vi.fn().mockResolvedValue(null) }));
 
 const tracks = Array.from({ length: 6 }, (_, index) =>
@@ -44,7 +44,7 @@ describe('accessibility', () => {
   });
 
   it('shuffle tab', async () => {
-    await expectAccessible(<ShuffleTab playlistId="p1" tracks={tracks} canEdit />);
+    await expectAccessible(<ShuffleTab playlistId="p1" tracks={tracks} canEdit onChanged={vi.fn()} />);
   });
 
   it('improve tab', async () => {

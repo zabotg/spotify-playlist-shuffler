@@ -14,6 +14,8 @@ import { pluralize } from '@/lib/utils/format';
 const GRID_CLASSES = 'grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5';
 const COVER_SIZES = '(min-width: 1024px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw';
 const SKELETON_CARD_COUNT = 10;
+/** Covers in the first row of the widest layout load eagerly; one of them is the page's LCP. */
+const EAGER_COVER_COUNT = 5;
 const CARD_CLASSES = 'flex flex-col gap-3 rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-3';
 
 function PlaylistGridSkeleton() {
@@ -64,7 +66,7 @@ export function PlaylistGrid() {
 
   return (
     <ul className={GRID_CLASSES}>
-      {data.playlists.map((playlist) => (
+      {data.playlists.map((playlist, index) => (
         <li key={playlist.id} className="min-w-0">
           <Link
             href={`/playlists/${playlist.id}`}
@@ -74,6 +76,7 @@ export function PlaylistGrid() {
               src={playlist.imageUrl}
               alt=""
               sizes={COVER_SIZES}
+              loading={index < EAGER_COVER_COUNT ? 'eager' : 'lazy'}
               className="aspect-square w-full shadow-md shadow-black/30 transition-opacity duration-150 group-hover:opacity-90"
             />
             <div className="flex min-w-0 flex-col gap-1">

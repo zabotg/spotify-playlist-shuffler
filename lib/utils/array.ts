@@ -50,6 +50,16 @@ export function uniqueBy<T, K>(items: readonly T[], keyOf: (item: T) => K): T[] 
   });
 }
 
+/** Takes one item from each list in turn: [a1, b1, a2, b2, ...], then the rest of the longer one. */
+export function interleave<T>(first: readonly T[], second: readonly T[]): T[] {
+  const result: T[] = [];
+  for (let index = 0; index < Math.max(first.length, second.length); index += 1) {
+    if (index < first.length) result.push(first[index]);
+    if (index < second.length) result.push(second[index]);
+  }
+  return result;
+}
+
 export function topEntries<K>(counts: Map<K, number>, limit: number): [K, number][] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }

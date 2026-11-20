@@ -9,7 +9,7 @@ import { ShuffleTab } from '@/app/playlists/[id]/_components/shuffle-tab';
 import { TracksTab } from '@/app/playlists/[id]/_components/tracks-tab';
 import { byArtist, enrich, makeFeatures, makeTrack } from '@/test/factories';
 
-const api = vi.hoisted(() => ({ replaceTracks: vi.fn(), create: vi.fn(), recommendations: vi.fn(), addTracks: vi.fn() }));
+const api = vi.hoisted(() => ({ overwriteTracks: vi.fn(), create: vi.fn(), recommendations: vi.fn(), addTracks: vi.fn() }));
 vi.mock('@/lib/api/playlists-api', () => ({ playlistsApi: api }));
 vi.mock('@/lib/api/tracks-api', () => ({ tracksApi: { preview: vi.fn() } }));
 
@@ -46,9 +46,19 @@ describe('ShuffleTab', () => {
     enrich(byArtist(`artist-${index}`), { bpm: 100 + index, features: makeFeatures({ energy: 0.5 + index / 100 }) }),
   );
 
-  it('previews a new order, changes it on "Shuffle again" and saves it as shown', async () => {
-    api.replaceTracks.mockResolvedValue({ playlistId: 'p1', playlistUrl: 'https://open.spotify.com/playlist/p1' });
-    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit />);
+  const link = { playlistId: 'p1', playlistUrl: 'https://open.spotify.com/playlist/p1' };
+
+  it('previews a new order, changes it on "Shuffle again" and saves it as shown, with live progress', async () => {
+    let finishSave: () => void = () => {};
+    api.overwriteTracks.mockImplementation(
+      (_id: string, _uris: string[], _method: string, onProgress: (progress: { done: number; total: number }) => void) =>
+        new Promise((resolve) => {
+          onProgress({ done: 3, total: 8 });
+          finishSave = () => resolve(link);
+        }),
+    );
+    const onChanged = vi.fn().mockResolvedValue(undefined);
+    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit onChanged={onChanged} />);
 
     await userEvent.click(screen.getByRole('button', { name: /Preview shuffle/ }));
     const first = rowTitles();
@@ -60,18 +70,59 @@ describe('ShuffleTab', () => {
 
     const shown = rowTitles();
     await userEvent.click(screen.getByRole('button', { name: 'Save order' }));
-    await waitFor(() => expect(api.replaceTracks).toHaveBeenCalled());
-    const savedUris = api.replaceTracks.mock.calls[0][1] as string[];
+    await waitFor(() => expect(api.overwriteTracks).toHaveBeenCalled());
+    const [, savedUris, method] = api.overwriteTracks.mock.calls[0] as [string, string[], string];
     const asShown = savedUris.map((uri) => {
       const { track } = tracks.find((item) => item.track.uri === uri)!;
       return `${track.name}${track.artists[0].name}`;
     });
     expect(asShown).toEqual(shown);
+    expect(method).toBe('move');
+
+    expect(await screen.findByText('Moving tracks… 3 of 8')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Saving to Spotify' })).toHaveAttribute('aria-valuenow', '38');
+    expect(onChanged).not.toHaveBeenCalled();
+
+    finishSave();
     expect(await screen.findByText('Saved!')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('can replace the whole list at once instead, showing batch progress', async () => {
+    api.overwriteTracks.mockImplementation(
+      (_id: string, _uris: string[], _method: string, onProgress: (progress: { done: number; total: number }) => void) => {
+        onProgress({ done: 0, total: 0 });
+        return new Promise(() => {});
+      },
+    );
+    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit onChanged={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /Preview shuffle/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Replace all at once' }));
+    expect(screen.getByText(/resets to now/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    expect(api.overwriteTracks.mock.calls[0][2]).toBe('replace');
+    expect(await screen.findByText('Saving… batch 0 of 0')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+  });
+
+  it('saves a new playlist without reloading this one', async () => {
+    api.create.mockResolvedValue(link);
+    const onChanged = vi.fn();
+    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit onChanged={onChanged} />);
+    await userEvent.click(screen.getByRole('button', { name: /Preview shuffle/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create new playlist' }));
+    expect(screen.queryByRole('group', { name: 'How to overwrite' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save order' }));
+
+    expect(await screen.findByText('Saved!')).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
   });
 
   it('explains why audio-based modes are unavailable', async () => {
-    render(<ShuffleTab playlistId="p1" tracks={[enrich(makeTrack()), enrich(makeTrack())]} canEdit={false} />);
+    render(<ShuffleTab playlistId="p1" tracks={[enrich(makeTrack()), enrich(makeTrack())]} canEdit={false} onChanged={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /DJ mix/ }));
     expect(screen.getAllByText('No audio data found for these tracks').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Preview shuffle/ })).toBeDisabled();

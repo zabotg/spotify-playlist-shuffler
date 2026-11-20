@@ -6,6 +6,7 @@ import {
   toPlaylistLink,
   type EnrichedPlaylistTracks,
   type EnrichedTrack,
+  type OverwriteMethod,
   type PlaylistLink,
   type PlaylistSummary,
 } from '@/lib/domain/models/playlist';
@@ -15,6 +16,8 @@ import { getAudioFeatures, peekTrackDetails } from './track-data-service';
 import { resolveDisplayNames, type KnownUser } from './user-service';
 
 const NEW_PLAYLIST_DESCRIPTION = 'Created with Spotify Playlist Shuffler';
+/** Spotify adds or replaces at most this many tracks per request. */
+const SPOTIFY_WRITE_BATCH_SIZE = 100;
 
 export async function getEditablePlaylists(client: SpotifyClient, userId: string): Promise<PlaylistSummary[]> {
   const playlists = await client.getAllPlaylists();
@@ -52,16 +55,28 @@ export async function loadEnrichedTracks(
   return { tracks, skippedItemCount };
 }
 
+export interface PlannedOverwrite {
+  /** Steps the save takes: one per move, or one per batch of 100 tracks. */
+  total: number;
+  /** Saves the new order. `onProgress` gets the number of steps done after each one. */
+  run: (onProgress: (done: number) => void) => Promise<PlaylistLink>;
+}
+
 /**
- * Saves a new track order by moving tracks, never by removing and re-adding them, so each
- * track keeps its "date added". Playlists with local files or episodes are refused because
- * the app can't see where those items sit.
+ * Checks a new track order against the playlist and plans how to save it, before changing
+ * anything, so a bad request fails right away instead of halfway through.
+ *
+ * `move` moves tracks, never removing and re-adding them, so each keeps its "date added". It
+ * takes about one request per track, so big playlists take minutes. `replace` swaps the whole
+ * list in batches of 100: seconds, but "date added" resets. Either way, playlists with local
+ * files or episodes are refused because the app can't see where those items sit.
  */
-export async function replacePlaylistOrder(
+export async function planPlaylistOverwrite(
   client: SpotifyClient,
   playlistId: string,
   uris: readonly string[],
-): Promise<PlaylistLink> {
+  method: OverwriteMethod,
+): Promise<PlannedOverwrite> {
   const { items, skippedItemCount } = await client.getPlaylistTracks(playlistId);
   if (skippedItemCount > 0) {
     throw new HttpError(
@@ -79,10 +94,29 @@ export async function replacePlaylistOrder(
     throw new HttpError(409, 'CONFLICT', 'The playlist changed since it was loaded. Reload the page and try again.');
   }
 
-  // Moves depend on the previous ones, so they run in order, each on the latest snapshot.
-  let snapshotId: string | undefined;
-  for (const move of moves) snapshotId = await client.moveItems(playlistId, move, snapshotId);
-  return toPlaylistLink(playlistId);
+  if (method === 'replace') {
+    return {
+      total: Math.ceil(uris.length / SPOTIFY_WRITE_BATCH_SIZE),
+      run: async (onProgress) => {
+        let done = 0;
+        await client.replaceItems(playlistId, uris, () => onProgress((done += 1)));
+        return toPlaylistLink(playlistId);
+      },
+    };
+  }
+
+  return {
+    total: moves.length,
+    run: async (onProgress) => {
+      // Moves depend on the previous ones, so they run in order, each on the latest snapshot.
+      let snapshotId: string | undefined;
+      for (const [index, move] of moves.entries()) {
+        snapshotId = await client.moveItems(playlistId, move, snapshotId);
+        onProgress(index + 1);
+      }
+      return toPlaylistLink(playlistId);
+    },
+  };
 }
 
 /** Adds tracks at the end, or at `position` (e.g. between two tracks). */

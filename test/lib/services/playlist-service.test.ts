@@ -13,7 +13,7 @@ import {
   removeTracksAt,
   getEditablePlaylists,
   loadEnrichedTracks,
-  replacePlaylistOrder,
+  planPlaylistOverwrite,
 } from '@/lib/services/playlist-service';
 
 function fakeClient(overrides: Partial<Record<keyof SpotifyClient, unknown>> = {}) {
@@ -21,6 +21,7 @@ function fakeClient(overrides: Partial<Record<keyof SpotifyClient, unknown>> = {
     getAllPlaylists: vi.fn(),
     getPlaylistTracks: vi.fn(),
     moveItems: vi.fn(),
+    replaceItems: vi.fn(),
     removeTracks: vi.fn(),
     addTracksToPlaylist: vi.fn(),
     createPlaylist: vi.fn(),
@@ -76,34 +77,63 @@ describe('playlist service', () => {
 
   it('refuses to overwrite playlists with items Spotify cannot add back', async () => {
     const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue({ items: [], skippedItemCount: 2 }) });
-    await expect(replacePlaylistOrder(client, 'p1', uris('a'))).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
+    for (const method of ['move', 'replace'] as const) {
+      await expect(planPlaylistOverwrite(client, 'p1', uris('a'), method)).rejects.toMatchObject({
+        status: 409,
+        code: 'CONFLICT',
+      });
+    }
     expect(client.moveItems).not.toHaveBeenCalled();
+    expect(client.replaceItems).not.toHaveBeenCalled();
   });
 
   it('refuses when the playlist changed since it was loaded', async () => {
     const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b')) });
-    await expect(replacePlaylistOrder(client, 'p1', uris('a', 'c'))).rejects.toMatchObject({
+    await expect(planPlaylistOverwrite(client, 'p1', uris('a', 'c'), 'replace')).rejects.toMatchObject({
       status: 409,
       message: 'The playlist changed since it was loaded. Reload the page and try again.',
     });
-    expect(client.moveItems).not.toHaveBeenCalled();
+    expect(client.replaceItems).not.toHaveBeenCalled();
   });
 
-  it('moves tracks into the new order, chaining snapshots, without re-adding them', async () => {
+  it('plans one step per move, then moves tracks in order, chaining snapshots and reporting progress', async () => {
     const moveItems = vi.fn().mockResolvedValueOnce('s1').mockResolvedValueOnce('s2');
-    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b', 'c')), moveItems });
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b', 'c', 'd')), moveItems });
+    const onProgress = vi.fn();
 
-    expect(await replacePlaylistOrder(client, 'p1', uris('c', 'a', 'b'))).toEqual({
-      playlistId: 'p1',
-      playlistUrl: 'https://open.spotify.com/playlist/p1',
-    });
-    expect(moveItems.mock.calls).toEqual([['p1', { rangeStart: 2, rangeLength: 1, insertBefore: 0 }, undefined]]);
+    const overwrite = await planPlaylistOverwrite(client, 'p1', uris('c', 'a', 'b', 'd').reverse(), 'move');
+    expect(overwrite.total).toBe(2);
+    expect(moveItems).not.toHaveBeenCalled();
+
+    expect(await overwrite.run(onProgress)).toEqual({ playlistId: 'p1', playlistUrl: 'https://open.spotify.com/playlist/p1' });
+    expect(moveItems.mock.calls.map(([, , snapshot]) => snapshot)).toEqual([undefined, 's1']);
+    expect(onProgress.mock.calls).toEqual([[1], [2]]);
     expect(client.addTracksToPlaylist).not.toHaveBeenCalled();
   });
 
   it('makes no requests when the order did not change', async () => {
     const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf('a', 'b')) });
-    await replacePlaylistOrder(client, 'p1', uris('a', 'b'));
+    const overwrite = await planPlaylistOverwrite(client, 'p1', uris('a', 'b'), 'move');
+    expect(overwrite.total).toBe(0);
+    await overwrite.run(vi.fn());
+    expect(client.moveItems).not.toHaveBeenCalled();
+  });
+
+  it('replaces the whole list in batches of 100 when asked to, reporting each batch', async () => {
+    const ids = Array.from({ length: 150 }, (_, index) => `t${index}`);
+    const replaceItems = vi.fn(async (_id: string, _uris: string[], onBatch: () => void) => {
+      onBatch();
+      onBatch();
+    });
+    const client = fakeClient({ getPlaylistTracks: vi.fn().mockResolvedValue(playlistOf(...ids)), replaceItems });
+    const onProgress = vi.fn();
+
+    const overwrite = await planPlaylistOverwrite(client, 'p1', uris(...ids).reverse(), 'replace');
+    expect(overwrite.total).toBe(2);
+    await overwrite.run(onProgress);
+
+    expect(replaceItems).toHaveBeenCalledWith('p1', uris(...ids).reverse(), expect.any(Function));
+    expect(onProgress.mock.calls).toEqual([[1], [2]]);
     expect(client.moveItems).not.toHaveBeenCalled();
   });
 

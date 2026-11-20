@@ -18,7 +18,7 @@ import { byArtist, enrich, makeFeatures, makeTrack } from '@/test/factories';
 const playlists = vi.hoisted(() => ({
   get: vi.fn(),
   tracks: vi.fn(),
-  replaceTracks: vi.fn(),
+  overwriteTracks: vi.fn(),
   create: vi.fn(),
   recommendations: vi.fn(),
   addTracks: vi.fn(),
@@ -38,7 +38,7 @@ describe('ShuffleTab settings', () => {
 
   it('applies the energy shape, artist gap and mood order of each mode', async () => {
     playlists.create.mockResolvedValue({ playlistId: 'n', playlistUrl: 'https://open.spotify.com/playlist/n' });
-    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit={false} />);
+    render(<ShuffleTab playlistId="p1" tracks={tracks} canEdit={false} onChanged={vi.fn()} />);
     const preview = () => screen.getByRole('button', { name: /Preview shuffle|Shuffle again/ });
 
     await userEvent.click(screen.getByRole('button', { name: /Energy curve/ }));
@@ -68,11 +68,11 @@ describe('ShuffleTab settings', () => {
   });
 
   it('explains missing BPM data and empty playlists', async () => {
-    const { unmount } = render(<ShuffleTab playlistId="p1" tracks={[enrich(makeTrack())]} canEdit />);
+    const { unmount } = render(<ShuffleTab playlistId="p1" tracks={[enrich(makeTrack())]} canEdit onChanged={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /Smooth BPM/ }));
     expect(screen.getAllByText('No BPM data found for these tracks').length).toBeGreaterThan(0);
     unmount();
-    render(<ShuffleTab playlistId="p1" tracks={[]} canEdit />);
+    render(<ShuffleTab playlistId="p1" tracks={[]} canEdit onChanged={vi.fn()} />);
     expect(screen.getByText('This playlist has no tracks')).toBeInTheDocument();
   });
 });

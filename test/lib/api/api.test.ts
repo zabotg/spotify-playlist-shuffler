@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, mockFetch } from '@/test/fakes';
 import { artistsApi } from '@/lib/api/artists-api';
 import { playlistsApi } from '@/lib/api/playlists-api';
-import { ApiRequestError, apiRequest } from '@/lib/api/request';
+import { ApiRequestError, apiRequest, progressRequest } from '@/lib/api/request';
 import { tracksApi } from '@/lib/api/tracks-api';
 
 const assign = vi.fn();
@@ -42,6 +42,56 @@ describe('apiRequest', () => {
   });
 });
 
+/** A streamed response whose body arrives in these pieces. */
+function streamResponse(...pieces: string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const piece of pieces) controller.enqueue(encoder.encode(piece));
+        controller.close();
+      },
+    }),
+  );
+}
+
+describe('progressRequest', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { location: { assign } });
+  });
+
+  it('reports progress and resolves with the result, even when lines are split across pieces', async () => {
+    const fetchMock = mockFetch(
+      streamResponse('{"type":"progress","done":0,"total":2}\n{"type":"prog', 'ress","done":2,"total":2}\n', '{"type":"done","result":{"ok":1}}\n'),
+    );
+    const onProgress = vi.fn();
+
+    expect(await progressRequest('/api/x', { method: 'PUT', body: { a: 1 } }, onProgress)).toEqual({ ok: 1 });
+    expect(onProgress.mock.calls).toEqual([[{ done: 0, total: 2 }], [{ done: 2, total: 2 }]]);
+    expect(fetchMock).toHaveBeenCalledWith('/api/x', expect.objectContaining({ method: 'PUT', body: '{"a":1}' }));
+  });
+
+  it('throws the message of an error that happened halfway', async () => {
+    mockFetch(streamResponse('{"type":"progress","done":0,"total":2}\n{"type":"error","message":"Rate limited"}\n'));
+    await expect(progressRequest('/api/x', { method: 'PUT' }, vi.fn())).rejects.toThrow('Rate limited');
+  });
+
+  it('throws when the stream ends without a result', async () => {
+    mockFetch(streamResponse('{"type":"progress","done":0,"total":2}\n'));
+    await expect(progressRequest('/api/x', { method: 'PUT' }, vi.fn())).rejects.toThrow(
+      'The connection was lost before saving finished. Reload the page to see what was saved.',
+    );
+  });
+
+  it('throws normal API errors before the stream starts', async () => {
+    mockFetch(jsonResponse({ error: 'CONFLICT', message: 'The playlist changed.' }, { status: 409 }));
+    await expect(progressRequest('/api/x', { method: 'PUT' }, vi.fn())).rejects.toMatchObject({
+      status: 409,
+      message: 'The playlist changed.',
+    });
+  });
+});
+
 describe('resource clients', () => {
   beforeEach(() => {
     vi.stubGlobal('window', { location: { assign } });
@@ -53,7 +103,7 @@ describe('resource clients', () => {
     await playlistsApi.get('p/1');
     await playlistsApi.tracks('p1');
     await playlistsApi.recommendations('p1', 5);
-    await playlistsApi.replaceTracks('p1', ['u']);
+    await playlistsApi.overwriteTracks('p1', ['u'], 'replace', vi.fn()).catch(() => null);
     await playlistsApi.addTracks('p1', ['u']);
     await playlistsApi.create('Mix', ['u']);
     await tracksApi.details(['ISRC']);

@@ -86,6 +86,19 @@ export interface PlaylistLink {
   playlistUrl: string;
 }
 
+/**
+ * How to save a new order over a playlist: `move` moves each track (keeps "date added", one
+ * request per move), `replace` swaps the whole list in batches of 100 (fast, resets "date added").
+ */
+export const OVERWRITE_METHODS = ['move', 'replace'] as const;
+export type OverwriteMethod = (typeof OVERWRITE_METHODS)[number];
+
+/** How far a long save is: `done` of `total` steps (moves or batches). */
+export interface SaveProgress {
+  done: number;
+  total: number;
+}
+
 export function canEditPlaylist(playlist: PlaylistSummary, userId: string): boolean {
   return playlist.ownerId === userId || playlist.collaborative;
 }

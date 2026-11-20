@@ -64,7 +64,8 @@ function describeIssue(issue: FlowIssue, from: EnrichedTrack, to: EnrichedTrack)
 interface EditProps {
   playlistId: string;
   canEdit: boolean;
-  onChanged: () => void;
+  /** Reloads the playlist; resolves once the new tracks are in. */
+  onChanged: () => Promise<unknown>;
 }
 
 function BridgeFinder({ transition, tracks, playlistId, canEdit, onChanged }: EditProps & { transition: Transition; tracks: EnrichedTrack[] }) {
@@ -74,6 +75,9 @@ function BridgeFinder({ transition, tracks, playlistId, canEdit, onChanged }: Ed
   const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
   const suggestions = useAsyncAction(playlistsApi.bridge);
   const insert = useAsyncAction((uris: string[]) => playlistsApi.addTracks(playlistId, uris, transition.index + 1));
+  // Once the songs are in, the playlist reloads and this pair is no longer next to each other,
+  // so this card goes away. Until then, don't offer the same insert again.
+  const [insertedCount, setInsertedCount] = useState(0);
   const toggle = useCallback(
     (uri: string) =>
       setSelected((current) => {
@@ -87,7 +91,27 @@ function BridgeFinder({ transition, tracks, playlistId, canEdit, onChanged }: Ed
   const selection = useMemo(() => ({ selected, onToggle: toggle }), [selected, toggle]);
 
   async function insertSelected() {
-    if (await insert.run([...selected])) onChanged();
+    if (!(await insert.run([...selected]))) return;
+    setInsertedCount(selected.size);
+    setSelected(new Set());
+    await onChanged();
+    // Normally the reload removes this card. If it is still here (the reload failed), show it again.
+    setInsertedCount(0);
+  }
+
+  if (insertedCount > 0) {
+    return (
+      <li className="flex flex-col gap-2 rounded-lg border border-zinc-800 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <TrackLabel item={from} position={transition.index} />
+          <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-zinc-500" />
+          <TrackLabel item={to} position={transition.index + 1} />
+        </div>
+        <p role="status" className="text-xs text-spotify">
+          Added {pluralize(insertedCount, 'song')} between them. Updating the flow…
+        </p>
+      </li>
+    );
   }
 
   return (
@@ -174,7 +198,14 @@ function FlowCard({ tracks, ...edit }: EditProps & { tracks: EnrichedTrack[] }) 
               </p>
               <ul className="flex flex-col gap-2">
                 {rough.map((transition) => (
-                  <BridgeFinder key={transition.index} transition={transition} tracks={tracks} {...edit} />
+                  // Keyed by the pair, not just the position: after an insert, a different pair can
+                  // sit at the same position and must not inherit the old suggestions.
+                  <BridgeFinder
+                    key={`${transition.index}:${tracks[transition.index].track.id}:${tracks[transition.index + 1].track.id}`}
+                    transition={transition}
+                    tracks={tracks}
+                    {...edit}
+                  />
                 ))}
               </ul>
             </>
@@ -189,7 +220,7 @@ function useRemoval({ playlistId, onChanged }: EditProps) {
   const removal = useAsyncAction((positions: number[]) => playlistsApi.removeTracks(playlistId, positions));
   async function remove(positions: number[], description: string) {
     if (!window.confirm(`Remove ${description} from the playlist in Spotify?`)) return;
-    if (await removal.run(positions)) onChanged();
+    if (await removal.run(positions)) await onChanged();
   }
   return { remove, isRemoving: removal.isLoading, error: removal.error };
 }

@@ -1,12 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { byArtist, enrich, makeFeatures, seededRandom } from '@/test/factories';
+import { byArtist, enrich, makeFeatures, makeTrack, seededRandom } from '@/test/factories';
 import { buildSoundProfile } from '@/lib/domain/engines/similarity';
 import {
+  hasArtistNamed,
+  keepTracksByArtists,
   pickRepresentativeTracks,
   rankBridgeCandidates,
   rankCandidates,
   selectNewCandidates,
 } from '@/lib/domain/engines/discovery';
+
+describe('hasArtistNamed', () => {
+  const track = makeTrack({ artists: [{ id: '1', name: 'Mötley Crüe' }, { id: '2', name: '米津玄師' }] });
+
+  it('compares names loosely, on any of the artists', () => {
+    expect(hasArtistNamed(track, 'motley crue')).toBe(true);
+    expect(hasArtistNamed(track, '米津玄師')).toBe(true);
+  });
+
+  it('rejects other artists, including other names without Latin letters', () => {
+    expect(hasArtistNamed(track, 'Bad Bunny')).toBe(false);
+    expect(hasArtistNamed(track, 'ヨルシカ')).toBe(false);
+    expect(hasArtistNamed(makeTrack({ artists: [{ id: '3', name: '2' }] }), 'Би-2')).toBe(false);
+  });
+});
+
+describe('keepTracksByArtists', () => {
+  it('keeps only tracks with at least one of the given artists', () => {
+    const metal = makeTrack({ artists: [{ id: '1', name: 'Slayer' }] });
+    const feature = makeTrack({ artists: [{ id: '2', name: 'Someone' }, { id: '3', name: 'MEGADETH' }] });
+    const reggaeton = makeTrack({ artists: [{ id: '4', name: 'Bad Bunny' }] });
+
+    expect(keepTracksByArtists([metal, feature, reggaeton], ['slayer', 'Megadeth'])).toEqual([metal, feature]);
+  });
+});
 
 describe('selectNewCandidates', () => {
   it('skips tracks already in the playlist and duplicate candidates', () => {

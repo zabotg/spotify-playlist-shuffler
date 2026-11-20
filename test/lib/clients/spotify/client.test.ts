@@ -125,6 +125,22 @@ describe('SpotifyClient', () => {
     expect(JSON.parse(String(initOf(fetchMock, 0)?.body)).items[0]).toEqual({ uri: 'spotify:track:t0' });
   });
 
+  it('replaces all items: the first batch replaces the list, the rest are appended in order', async () => {
+    const uris = Array.from({ length: 250 }, (_, index) => `spotify:track:t${index}`);
+    const fetchMock = mockFetch(jsonResponse({}), jsonResponse({}), jsonResponse({}));
+    const onBatch = vi.fn();
+
+    await client.replaceItems('p1', uris, onBatch);
+
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['PUT', 'POST', 'POST']);
+    expect(JSON.parse(String(initOf(fetchMock, 0)?.body)).uris).toEqual(uris.slice(0, 100));
+    expect(JSON.parse(String(initOf(fetchMock, 2)?.body)).uris).toEqual(uris.slice(200));
+    expect(onBatch).toHaveBeenCalledTimes(3);
+
+    mockFetch(jsonResponse({}));
+    await client.replaceItems('p1', uris.slice(0, 1));
+  });
+
   it('moves a range of items and returns the new snapshot', async () => {
     const fetchMock = mockFetch(jsonResponse({ snapshot_id: 's2' }), jsonResponse({ snapshot_id: 's3' }));
     const move = { rangeStart: 5, rangeLength: 2, insertBefore: 0 };
